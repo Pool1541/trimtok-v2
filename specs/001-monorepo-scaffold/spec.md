@@ -5,6 +5,16 @@
 **Status**: Draft  
 **Input**: User description: "Build the scaffolding for TrimTok; this should be a monorepo with /back and /front folders. Should be able to compile and start both projects from a centralized package.json file."
 
+## Clarifications
+
+### Session 2026-04-07
+
+- Q: How should the root `dev` script run `/front` and `/back` concurrently? → A: `concurrently` npm package
+- Q: Should source files use TypeScript or JavaScript? → A: TypeScript (strict mode) in both `/front` and `/back`
+- Q: What minimum Node.js version must the repository require? → A: Node.js v24 LTS
+- Q: How should the backend run during local development? → A: `sst dev` (SST Live Lambda Development — requires valid AWS credentials)
+- Q: Should the monorepo include a `/packages` folder for shared modules now? → A: No — only `/front` and `/back`; no `/packages` in this scope (YAGNI)
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -116,13 +126,17 @@ project being installed or running.
 - **FR-002**: The repository root MUST contain a `package.json` that declares both `/front`
   and `/back` as workspace members.
 - **FR-003**: The root `package.json` MUST expose a single `dev` script that starts both
-  `/front` and `/back` development servers concurrently.
+  `/front` and `/back` development servers concurrently using the `concurrently` npm package.
+  Each project's output MUST be prefixed with its project name in the terminal.
 - **FR-004**: The root `package.json` MUST expose a single `build` script that builds both
   `/front` and `/back` for production.
 - **FR-005**: The `/front` project MUST be configured as a Next.js application with static
-  export enabled.
-- **FR-006**: The `/back` project MUST be configured with SST as the infrastructure and
-  deployment framework targeting AWS Lambda.
+  export enabled and TypeScript support (`tsconfig.json` in strict mode).
+- **FR-006**: The `/back` project MUST be configured with SST (Ion) as the infrastructure and
+  deployment framework targeting AWS Lambda, with TypeScript (`tsconfig.json` in strict mode)
+  as the source language for all Lambda handler code. The `/back` `dev` script MUST invoke
+  `sst dev`, which uses SST Live Lambda Development to tunnel invocations to real AWS
+  infrastructure; valid AWS credentials are required in the developer environment.
 - **FR-007**: Each project (`/front`, `/back`) MUST have its own `package.json` with scripts
   for `dev` and `build` so they remain independently runnable.
 - **FR-008**: A single root install command MUST install dependencies for all workspace
@@ -131,6 +145,9 @@ project being installed or running.
   application configuration — only workspace orchestration scripts.
 - **FR-010**: The repository MUST include a root-level `.gitignore` that excludes `node_modules`,
   build outputs, and environment files for both sub-projects.
+- **FR-011**: The root `package.json` MUST declare `"engines": { "node": ">=24" }` to enforce
+  the minimum Node.js v24 LTS runtime requirement. The repository MUST include a `.nvmrc` or
+  `.node-version` file pinned to `24` at the repository root.
 
 ## Success Criteria *(mandatory)*
 
@@ -148,14 +165,20 @@ project being installed or running.
 
 ## Assumptions
 
-- The target developers have Node.js (LTS) and a compatible package manager installed prior
-  to cloning; no runtime installation is in scope for this feature.
+- The target developers have Node.js v24 LTS installed prior to cloning; no runtime
+  installation is in scope for this feature. The repository enforces this minimum via the
+  `engines` field in the root `package.json`.
+- Both `/front` and `/back` use TypeScript with strict mode enabled; no plain JavaScript
+  source files are permitted in either project.
 - The workspace orchestration uses npm workspaces; switching to an alternative package manager
   workspace implementation is out of scope for v1.
-- SST requires valid AWS credentials to deploy; the local development mode of the backend
-  MUST work without live AWS credentials wherever SST supports local emulation.
+- The `/back` development mode uses `sst dev` (SST Live Lambda Development), which requires
+  valid AWS credentials in the developer environment. There is no local-only emulation mode;
+  developers MUST have an AWS account and properly configured credentials to run the backend.
 - The `/front` Next.js application starts as a blank scaffold (no pages beyond a default
   index); full page implementation is out of scope.
 - The `/back` SST project starts as a blank scaffold with a single health-check Lambda
   function wired to API Gateway; business logic implementation is out of scope.
-- CI/CD pipeline configuration (GitHub Actions, etc.) is out of scope for this feature.
+- The repository structure is intentionally minimal: only `/front` and `/back` are in scope.
+  A `/packages` directory for shared modules MUST NOT be created as part of this feature;
+  shared module support is deferred to a future feature if needed.
