@@ -1,0 +1,15 @@
+{
+  "private": true,
+  "workspaces": ["front", "back"],
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=10.8.0"
+  },
+  "scripts": {
+    "dev": "concurrently -n front,back -c cyan,yellow \"npm run dev --workspace=front\" \"npm run dev --workspace=back\"",
+    "build": "npm run build --workspace=front && npm run build --workspace=back"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
