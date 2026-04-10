@@ -18,9 +18,9 @@
 **Purpose**: Initialize the repository root with workspace orchestration, Node.js pinning, and ignore rules.
 All subsequent phases depend on the root `package.json` npm workspaces declaration.
 
-- [ ] T001 Create root `package.json` with `"private": true`, `"workspaces": ["front","back"]`, `"engines": {"node":">=24.0.0","npm":">=10.8.0"}`, `"scripts": {"dev":"concurrently -n front,back -c cyan,yellow \"npm run dev --workspace=front\" \"npm run dev --workspace=back\"","build":"npm run build --workspace=front && npm run build --workspace=back"}`, `"devDependencies": {"concurrently":"^9.0.0"}` in `package.json`
-- [ ] T002 [P] Create `.nvmrc` at repo root with single line content `24` in `.nvmrc`
-- [ ] T003 [P] Create root `.gitignore` excluding `node_modules/`, `.next/`, `out/`, `dist/`, `.sst/`, `.env`, `.env.*`, `*.env.local` in `.gitignore`
+- [X] T001 Create root `package.json` with `"private": true`, `"workspaces": ["front","back"]`, `"engines": {"node":">=24.0.0","npm":">=10.8.0"}`, `"scripts": {"dev":"concurrently -n front,back -c cyan,yellow \"npm run dev --workspace=front\" \"npm run dev --workspace=back\"","build":"npm run build --workspace=front && npm run build --workspace=back"}`, `"devDependencies": {"concurrently":"^9.0.0"}` in `package.json`
+- [X] T002 [P] Create `.nvmrc` at repo root with single line content `24` in `.nvmrc`
+- [X] T003 [P] Create root `.gitignore` excluding `node_modules/`, `.next/`, `out/`, `dist/`, `.sst/`, `.env`, `.env.*`, `*.env.local` in `.gitignore`
 
 **Checkpoint**: Root workspace configuration complete — `npm install` will install all sub-project dependencies in one step
 
@@ -33,10 +33,10 @@ These files are blocking prerequisites for ALL user stories — no story can be 
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 [P] Create `front/package.json` with `"name":"front"`, `"private":true`, `"scripts":{"dev":"next dev","build":"next build","lint":"next lint"}`, `"dependencies":{"next":"^16.0.0","react":"^19.0.0","react-dom":"^19.0.0"}`, `"devDependencies":{"typescript":"^5.0.0","@types/node":"^24.0.0","@types/react":"^19.0.0","@types/react-dom":"^19.0.0"}` in `front/package.json`
-- [ ] T005 [P] Create `back/package.json` with `"name":"back"`, `"private":true`, `"scripts":{"dev":"sst dev","build":"sst build","deploy":"sst deploy"}`, `"devDependencies":{"sst":"^4.0.0","@types/aws-lambda":"^8.10.0","typescript":"^5.0.0","@types/node":"^24.0.0"}` in `back/package.json`
-- [ ] T006 [P] Create `front/tsconfig.json` with TypeScript strict mode, `"target":"ES2020"`, `"moduleResolution":"bundler"`, `"jsx":"preserve"`, `"noEmit":true`, `"strict":true`, `"plugins":[{"name":"next"}]`, includes `["next-env.d.ts",".next/types/**/*.ts","**/*.ts","**/*.tsx"]` in `front/tsconfig.json`
-- [ ] T007 [P] Create `back/tsconfig.json` with TypeScript strict mode, `"target":"ES2024"`, `"module":"NodeNext"`, `"moduleResolution":"NodeNext"`, `"strict":true`, `"outDir":"./dist"`, `"rootDir":"./src"`, excludes `["node_modules","dist",".sst"]` in `back/tsconfig.json`
+- [X] T004 [P] Create `front/package.json` with `"name":"front"`, `"private":true`, `"scripts":{"dev":"next dev","build":"next build","lint":"next lint"}`, `"dependencies":{"next":"^16.0.0","react":"^19.0.0","react-dom":"^19.0.0"}`, `"devDependencies":{"typescript":"^5.0.0","@types/node":"^24.0.0","@types/react":"^19.0.0","@types/react-dom":"^19.0.0"}` in `front/package.json`
+- [X] T005 [P] Create `back/package.json` with `"name":"back"`, `"private":true`, `"scripts":{"dev":"sst dev","build":"sst build","deploy":"sst deploy"}`, `"devDependencies":{"sst":"^4.0.0","@types/aws-lambda":"^8.10.0","typescript":"^5.0.0","@types/node":"^24.0.0"}` in `back/package.json`
+- [X] T006 [P] Create `front/tsconfig.json` with TypeScript strict mode, `"target":"ES2020"`, `"moduleResolution":"bundler"`, `"jsx":"preserve"`, `"noEmit":true`, `"strict":true`, `"plugins":[{"name":"next"}]`, includes `["next-env.d.ts",".next/types/**/*.ts","**/*.ts","**/*.tsx"]` in `front/tsconfig.json`
+- [X] T007 [P] Create `back/tsconfig.json` with TypeScript strict mode, `"target":"ES2024"`, `"module":"NodeNext"`, `"moduleResolution":"NodeNext"`, `"strict":true`, `"outDir":"./dist"`, `"rootDir":"./src"`, excludes `["node_modules","dist",".sst"]` in `back/tsconfig.json`
 
 **Checkpoint**: Foundation ready — both sub-projects have valid package configurations and TypeScript settings. User story implementation can begin.
 
@@ -50,11 +50,11 @@ These files are blocking prerequisites for ALL user stories — no story can be 
 
 ### Implementation for User Story 1
 
-- [ ] T008 [P] [US1] Create `front/next.config.ts` with `output: 'export'` static export configuration using `NextConfig` TypeScript type in `front/next.config.ts`
-- [ ] T009 [P] [US1] Create Next.js App Router root layout with `<html>` and `<body>` shell, `metadata` export with title `"TrimTok"`, no business logic in `front/src/app/layout.tsx`
-- [ ] T010 [P] [US1] Create blank Next.js App Router index page exporting a default functional component with placeholder `<main>` element — no business logic, no styling in `front/src/app/page.tsx`
-- [ ] T011 [P] [US1] Create `back/sst.config.ts` with `$config` declaring app name `"trimtok-back"`, `home: "aws"`, `removal: "remove"` for non-production stages, and `sst.aws.ApiGatewayV2` with `routes: { "GET /health": { handler: "src/health.handler" } }` outputting `ApiUrl` in `back/sst.config.ts`
-- [ ] T012 [US1] Create health-check Lambda handler typed as `APIGatewayProxyHandlerV2` returning `statusCode: 200`, `Content-Type: application/json` header, and body `JSON.stringify({ status: "ok" })` in `back/src/health.ts`
+- [X] T008 [P] [US1] Create `front/next.config.ts` with `output: 'export'` static export configuration using `NextConfig` TypeScript type in `front/next.config.ts`
+- [X] T009 [P] [US1] Create Next.js App Router root layout with `<html>` and `<body>` shell, `metadata` export with title `"TrimTok"`, no business logic in `front/src/app/layout.tsx`
+- [X] T010 [P] [US1] Create blank Next.js App Router index page exporting a default functional component with placeholder `<main>` element — no business logic, no styling in `front/src/app/page.tsx`
+- [X] T011 [P] [US1] Create `back/sst.config.ts` with `$config` declaring app name `"trimtok-back"`, `home: "aws"`, `removal: "remove"` for non-production stages, and `sst.aws.ApiGatewayV2` with `routes: { "GET /health": { handler: "src/health.handler" } }` outputting `ApiUrl` in `back/sst.config.ts`
+- [X] T012 [US1] Create health-check Lambda handler typed as `APIGatewayProxyHandlerV2` returning `statusCode: 200`, `Content-Type: application/json` header, and body `JSON.stringify({ status: "ok" })` in `back/src/health.ts`
 
 **Checkpoint**: User Story 1 complete — `npm run dev` from root starts both projects. Front serves a blank page; back exposes `GET /health` via SST Live Lambda.
 
@@ -70,8 +70,8 @@ These files are blocking prerequisites for ALL user stories — no story can be 
 
 ### Implementation for User Story 2
 
-- [ ] T013 [P] [US2] Create `front/public/.gitkeep` to preserve the `public/` static assets directory in version control — required by Next.js static export conventions in `front/public/.gitkeep`
-- [ ] T014 [US2] Confirm root `package.json` `build` script matches the sequential pattern `npm run build --workspace=front && npm run build --workspace=back` (front must succeed before back is attempted per FR-004); update if divergent in `package.json`
+- [X] T013 [P] [US2] Create `front/public/.gitkeep` to preserve the `public/` static assets directory in version control — required by Next.js static export conventions in `front/public/.gitkeep`
+- [X] T014 [US2] Confirm root `package.json` `build` script matches the sequential pattern `npm run build --workspace=front && npm run build --workspace=back` (front must succeed before back is attempted per FR-004); update if divergent in `package.json`
 
 **Checkpoint**: User Story 2 complete — `npm run build` produces static export artifacts for front and Lambda artifacts for back; any sub-project failure halts the pipeline.
 
@@ -87,8 +87,8 @@ These files are blocking prerequisites for ALL user stories — no story can be 
 
 ### Implementation for User Story 3
 
-- [ ] T015 [P] [US3] Confirm `front/package.json` `dev` and `build` scripts are self-contained (no cross-workspace references) and that `front` has no dependency on `back` in its `dependencies` or `devDependencies` in `front/package.json`
-- [ ] T016 [US3] Confirm `back/package.json` `dev` and `build` scripts are self-contained (no cross-workspace references) and that `back` has no frontend dependency (`next`, `react`) in its `devDependencies` in `back/package.json`
+- [X] T015 [P] [US3] Confirm `front/package.json` `dev` and `build` scripts are self-contained (no cross-workspace references) and that `front` has no dependency on `back` in its `dependencies` or `devDependencies` in `front/package.json`
+- [X] T016 [US3] Confirm `back/package.json` `dev` and `build` scripts are self-contained (no cross-workspace references) and that `back` has no frontend dependency (`next`, `react`) in its `devDependencies` in `back/package.json`
 
 **Checkpoint**: User Story 3 complete — each sub-project runs independently; per-workspace root commands (`npm run dev --workspace=front`) work correctly.
 
@@ -98,9 +98,9 @@ These files are blocking prerequisites for ALL user stories — no story can be 
 
 **Purpose**: Final validation of monorepo-wide rules, Node.js version enforcement, and spec compliance.
 
-- [ ] T017 [P] Verify root `package.json` contains NO application configuration, routing rules, or business logic per FR-009 — only `workspaces`, `engines`, `scripts`, and `devDependencies` fields are permitted in `package.json`
-- [ ] T018 [P] Verify `.gitignore` covers all required exclusions per FR-010: `node_modules/`, `.next/`, `out/`, `.sst/`, `dist/`, and environment files (`.env`, `.env.*`) in `.gitignore`
-- [ ] T019 Verify `front/tsconfig.json` and `back/tsconfig.json` both have `"strict": true` — no plain JavaScript source files exist in either project per spec Assumptions in `front/tsconfig.json` and `back/tsconfig.json`
+- [X] T017 [P] Verify root `package.json` contains NO application configuration, routing rules, or business logic per FR-009 — only `workspaces`, `engines`, `scripts`, and `devDependencies` fields are permitted in `package.json`
+- [X] T018 [P] Verify `.gitignore` covers all required exclusions per FR-010: `node_modules/`, `.next/`, `out/`, `.sst/`, `dist/`, and environment files (`.env`, `.env.*`) in `.gitignore`
+- [X] T019 Verify `front/tsconfig.json` and `back/tsconfig.json` both have `"strict": true` — no plain JavaScript source files exist in either project per spec Assumptions in `front/tsconfig.json` and `back/tsconfig.json`
 
 ---
 
