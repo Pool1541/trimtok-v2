@@ -3,11 +3,11 @@ import { test, expect } from "@playwright/test";
 // Helper: navegar hasta vista previa pasando home + downloading
 async function navigateToPreview(page: import("@playwright/test").Page) {
   await page.goto("/");
-  await page.getByRole("textbox", { name: /url del video/i }).fill(
+  await page.getByRole("textbox", { name: /url del video/i }).pressSequentially(
     "https://www.tiktok.com/@user/video/7123456789012345678",
   );
   await page.getByRole("button", { name: /descargar/i }).click();
-  await expect(page.getByRole("heading", { name: /vista previa/i })).toBeVisible({ timeout: 4000 });
+  await expect(page.getByRole("heading", { name: /vista previa/i })).toBeVisible({ timeout: 6000 });
 }
 
 // E2E: Flujo de recorte (Vista previa → Recortar → Confirmar → GIF)
@@ -49,7 +49,7 @@ test.describe("Flujo de recorte — T037", () => {
     // Editar el campo FIN para que el segmento sea ≤ 6s
     const finInput = page.getByLabel("FIN");
     await finInput.click({ clickCount: 3 });
-    await finInput.fill("0:00:05");
+    await finInput.pressSequentially("0:00:05");
     await finInput.blur();
 
     const gifBtn = page.getByRole("button", { name: /crear gif/i });

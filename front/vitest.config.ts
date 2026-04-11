@@ -8,7 +8,8 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: ["./vitest-setup.ts"],
-    exclude: ["node_modules/**", "e2e/**"],
+    include: ["tests/unit/**/*.test.ts", "tests/integration/**/*.test.tsx"],
+    exclude: ["node_modules/**", "tests/e2e/**"],
     coverage: {
       provider: "v8",
       thresholds: {
@@ -20,7 +21,7 @@ export default defineConfig({
       exclude: [
         "node_modules/**",
         "src/components/ui/**",
-        "e2e/**",
+        "tests/e2e/**",
         "*.config.*",
         "vitest-setup.ts",
       ],
