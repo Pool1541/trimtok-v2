@@ -1,13 +1,19 @@
 {
   "private": true,
-  "workspaces": ["front", "back"],
+  "workspaces": [
+    "front",
+    "back"
+  ],
   "engines": {
     "node": ">=24.0.0",
     "npm": ">=10.8.0"
   },
   "scripts": {
     "dev": "concurrently -n front,back -c cyan,yellow \"npm run dev --workspace=front\" \"npm run dev --workspace=back\"",
-    "build": "npm run build --workspace=front && npm run build --workspace=back"
+    "build": "npm run build --workspace=front && npm run build --workspace=back",
+    "test:front": "npm run test:run --workspace=front",
+    "test:e2e": "npm run test:e2e --workspace=front",
+    "test:e2e:ui": "npm run test:e2e:ui --workspace=front"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"
