@@ -3,7 +3,7 @@
 **Input**: Design documents from `/specs/003-trimtok-backend/`  
 **Prerequisites**: plan.md ✅, spec.md ✅, research.md ✅, data-model.md ✅, contracts/api.md ✅, quickstart.md ✅  
 **Organization**: Tasks grouped by user story for independent implementation and testing.  
-**Tests**: Not included (not explicitly requested in spec — quickstart.md covers manual verification).
+**Tests**: Included — required by Constitution Principle VIII (coverage ≥ 80% MUST on domain + application layers).
 
 ## Format: `[ID] [P?] [Story?] Description with file path`
 
@@ -51,12 +51,12 @@
 - [ ] T011 [P] [US1] Create back/src/jobs/application/ports/job.repository.ts — `IJobRepository` interface: `save(job: Job): Promise<void>`, `findById(jobId: string): Promise<Job | null>`, `updateStatus(jobId, status, extra?: Partial<Job>): Promise<void>`, `acquireLock(videoId: string, jobId: string): Promise<boolean>`, `releaseLock(videoId: string): Promise<void>`
 - [ ] T012 [P] [US1] Create back/src/jobs/application/ports/artifact.repository.ts — `IArtifactRepository` interface: `findByKey(videoId, format, artifactType, trimStart?, trimEnd?): Promise<CacheArtifact | null>`, `save(artifact: CacheArtifact): Promise<void>`, `incrementDownloadCount(videoId, format, artifactType, trimStart?, trimEnd?): Promise<void>`
 - [ ] T013 [P] [US1] Create back/src/jobs/application/ports/job-queue.port.ts — `IJobQueuePort` interface with typed message payloads: `enqueueDownload(msg: DownloadMessage): Promise<void>`, `enqueueTrim(msg: TrimMessage): Promise<void>`, `enqueueGif(msg: GifMessage): Promise<void>`, `enqueueMp3(msg: Mp3Message): Promise<void>`; export each message type (DownloadMessage: { jobId, tiktokUrl, format }, TrimMessage: { jobId, videoId, trimStart, trimEnd }, GifMessage: { jobId, videoId, trimStart, trimEnd }, Mp3Message: { jobId, videoId, trimStart?, trimEnd? })
-- [ ] T014 [P] [US1] Create back/src/jobs/application/ports/storage.port.ts — `IStoragePort` interface: `upload(key: string, localPath: string, contentType: string): Promise<number>` (returns fileSizeBytes), `generatePresignedUrl(key: string, expiresIn?: number): Promise<string>` (default 3600s), `objectExists(key: string): Promise<boolean>`
+- [ ] T014 [P] [US1] Create back/src/jobs/application/ports/storage.port.ts — `IStoragePort` interface: `upload(key: string, localPath: string, contentType: string): Promise<number>` (returns fileSizeBytes), `download(key: string, destPath: string): Promise<void>` (streams S3 object to local file path), `generatePresignedUrl(key: string, expiresIn?: number): Promise<string>` (default 3600s), `objectExists(key: string): Promise<boolean>`
 - [ ] T015 [US1] Implement back/src/jobs/application/create-job.usecase.ts — `CreateJobUseCase(repos, queue, storage)`: **(1)** validate tiktokUrl domain (must include tiktok.com, reject others); **(2)** derive videoId from URL path; **(3)** check `IArtifactRepository.findByKey(videoId, format, "original")` for cache; **(4)** on cache hit: verify `IStoragePort.objectExists(artifact.s3Key)` (graceful miss if false), generate presigned URL, return `{hit: true, downloadUrl, job: null}`; **(5)** on cache miss: create Job via `createJob()` factory, `IJobRepository.save(job)`, `IJobQueuePort.enqueueDownload(...)`, return `{hit: false, job}`
 - [ ] T016 [P] [US1] Implement back/src/jobs/infrastructure/dynamo/job.dynamo-repo.ts — DynamoDB operations using dynamo.client.ts + table-keys.ts: `save` (PutItem with full Job item), `findById` (GetItem jobPk+jobSk), `updateStatus` (UpdateItem conditional on attribute_exists, sets status + updatedAt + optional extra fields), `acquireLock` (PutItem on `lockPk(videoId)/lockSk()` with `ConditionExpression: "attribute_not_exists(pk)"`, expiresAt +10min; returns `true` on success, `false` on ConditionalCheckFailedException), `releaseLock` (DeleteItem lockPk+lockSk)
 - [ ] T017 [P] [US1] Implement back/src/jobs/infrastructure/dynamo/artifact.dynamo-repo.ts — DynamoDB operations: `findByKey` (GetItem artifactPk+artifactSk), `save` (PutItem CacheArtifact item with expiresAt from `artifactTtlSeconds()`), `incrementDownloadCount` (UpdateItem ADD downloadCount 1)
 - [ ] T018 [P] [US1] Implement back/src/jobs/infrastructure/sqs/job-queue.adapter.ts — `IJobQueuePort` implementation: `SQSClient.SendMessage` for each queue using queue URLs sourced from `Resource.DownloadQueue.url`, `Resource.TrimQueue.url`, `Resource.GifQueue.url`, `Resource.Mp3Queue.url` (sst-env); serialize message body as JSON
-- [ ] T019 [P] [US1] Implement back/src/jobs/infrastructure/s3/artifact-storage.adapter.ts — `IStoragePort` implementation: `upload()` reads local file from localPath, calls `PutObjectCommand` with Body as fs.ReadStream; `generatePresignedUrl()` uses `GetObjectCommand` + `getSignedUrl` with expiresIn from parameter; `objectExists()` uses `HeadObjectCommand`, returns false on NotFound (404)
+- [ ] T019 [P] [US1] Implement back/src/jobs/infrastructure/s3/artifact-storage.adapter.ts — `IStoragePort` implementation: `upload()` reads local file from localPath, calls `PutObjectCommand` with Body as fs.ReadStream; `download()` calls `GetObjectCommand`, pipes `.Body` (SdkStreamMixin) to `fs.createWriteStream(destPath)` using Node.js stream pipeline, rejects on stream error; `generatePresignedUrl()` uses `GetObjectCommand` + `getSignedUrl` with expiresIn from parameter; `objectExists()` uses `HeadObjectCommand`, returns false on NotFound (404)
 - [ ] T020 [P] [US1] Create back/src/processing/domain/video-processor.entity.ts — `VideoInfo` type: videoId (string), title (string), duration (number, seconds), thumbnailUrl (string | null); `DownloadResult` type: videoInfo, s3Key, fileSizeBytes; `MAX_VIDEO_DURATION_SECONDS = 300` constant
 - [ ] T021 [P] [US1] Create back/src/processing/application/ports/downloader.port.ts — `IDownloaderPort` interface: `downloadVideo(url: string, destDir: string): Promise<DownloadResult & { localPath: string }>`; contract: validates duration ≤ MAX_VIDEO_DURATION_SECONDS before returning, throws AppError VIDEO_TOO_LONG if exceeded
 - [ ] T022 [US1] Implement back/src/processing/application/download-video.usecase.ts — `DownloadVideoUseCase(jobRepo, artifactRepo, downloader, storage, notifier)`: **(1)** call `IJobRepository.acquireLock(videoId, jobId)`; if false (concurrent) poll for artifact up to 30s then proceed as cache miss; **(2)** update job status to `downloading`; **(3)** call `IDownloaderPort.downloadVideo(tiktokUrl, "/tmp")`; **(4)** upload to S3 at `originals/{videoId}/{videoId}.mp4` via `IStoragePort.upload()`; **(5)** write `CacheArtifact` (format: mp4, type: original, expiresAt per D3) via `IArtifactRepository.save()`; **(6)** update job to `ready` with s3Key + videoInfo fields; **(7)** `IJobRepository.releaseLock(videoId)`; **(8)** call `INotifyJobUpdateUseCase.execute(jobId)` — throws on all errors (let caller handle retry)
@@ -146,6 +146,47 @@
 
 ---
 
+## Phase 8: Testing (Constitution Principle VIII)
+
+**Purpose**: Verify all critical business flows at unit level (domain + application layers, injected mocks, no AWS) and at integration level (DynamoDB Local). Coverage on `src/{jobs,processing,notifications}/**/{domain,application}/` MUST NOT fall below 80% per Constitution Principle VIII.
+
+**Prerequisite**: Unit test tasks can be written in parallel with their corresponding implementation tasks. Integration test tasks require the infrastructure adapters and DynamoDB Local to be available.
+
+### Testing Setup
+
+- [ ] T058 [P] Create back/vitest.config.ts — set testMatch `["tests/**/*.test.ts"]`, coverage provider `v8`, include `["src/{jobs,processing,notifications}/**/{domain,application}/**/*.ts"]`, thresholds `{ statements: 80, branches: 80, functions: 80, lines: 80 }`; add scripts to back/package.json: `"test": "vitest run"`, `"test:watch": "vitest"`, `"test:coverage": "vitest run --coverage"`, `"test:integration": "vitest run tests/integration --reporter verbose"`
+
+### Unit Tests — Domain Layer
+
+- [ ] T059 [P] [US1] Create back/tests/unit/jobs/domain/job-status.test.ts — verify all 10 JobStatus values exist as string literals; TERMINAL_STATUSES contains `{ready, trimmed, gif_created, mp3_ready, error}` and excludes `{pending, downloading, trimming, creating_gif, creating_mp3}`; TERMINAL_WITH_ARTIFACT excludes `error`
+- [ ] T060 [P] [US1] Create back/tests/unit/jobs/domain/job.entity.test.ts — test `createJob()` factory: jobId is 26-char ULID string, createdAt matches ISO 8601 regex, status defaults to `"pending"`, retryCount is `0`, expiresAt ≥ `Math.floor(Date.now()/1000) + 7*24*3600`
+- [ ] T061 [P] [US1] Create back/tests/unit/jobs/domain/cache-artifact.entity.test.ts — test `artifactTtlSeconds()`: mp4/original → 172800, mp4/trim → 86400, gif/gif → 86400, mp3/original → 172800, mp3/trim → 86400
+- [ ] T062 [P] [US1] Create back/tests/unit/processing/domain/video-processor.entity.test.ts — verify `MAX_VIDEO_DURATION_SECONDS === 300`; verify VideoInfo and DownloadResult types can be constructed with all expected fields without TypeScript errors
+
+### Unit Tests — Application Layer (injected mock adapters, zero AWS)
+
+- [ ] T063 [P] [US1] Create back/tests/unit/jobs/application/create-job.usecase.test.ts — mock IJobRepository, IArtifactRepository, IJobQueuePort, IStoragePort; test: (a) non-tiktok URL → `INVALID_URL`; (b) cache miss → saves job, enqueues download, returns `{hit:false}`; (c) cache hit + objectExists=true → returns `{hit:true, downloadUrl}`; (d) cache hit + objectExists=false → falls through to cache-miss path
+- [ ] T064 [P] [US2] Create back/tests/unit/jobs/application/get-job.usecase.test.ts — mock IJobRepository, IStoragePort; test: (a) findById=null → throws `JOB_NOT_FOUND`; (b) status=ready + s3Key + objectExists=true → returns downloadUrl; (c) status=ready + s3Key + objectExists=false → returns downloadUrl=null without throwing; (d) status=downloading (non-terminal) → returns downloadUrl=null
+- [ ] T065 [P] [US3] Create back/tests/unit/jobs/application/request-trim.usecase.test.ts — mock ports; test: (a) job not found → `JOB_NOT_FOUND`; (b) job.status≠ready → `JOB_NOT_READY`; (c) trimStart≥trimEnd → `INVALID_TRIM_RANGE`; (d) trimEnd>duration → `INVALID_TRIM_RANGE`; (e) cache miss → updates to trimming, enqueues TrimMessage; (f) cache hit + objectExists=true → updates to trimmed, returns downloadUrl
+- [ ] T066 [P] [US4] Create back/tests/unit/jobs/application/request-gif.usecase.test.ts — mock ports; test: (a) job.status not in `{ready,trimmed}` → `JOB_NOT_READY`; (b) trimEnd omitted → defaults to `min(10, job.duration)`; (c) cache miss → updates to creating_gif, enqueues GifMessage; (d) cache hit + objectExists=true → returns downloadUrl, updates to gif_created
+- [ ] T067 [P] [US4] Create back/tests/unit/jobs/application/request-mp3.usecase.test.ts — mock ports; test: (a) job not in `{ready,trimmed}` → `JOB_NOT_READY`; (b) no trimStart/trimEnd → artifactType=`"original"`, uses mp3s/originals/ path; (c) with trimStart+trimEnd → artifactType=`"trim"`, uses mp3s/trims/ path; (d) cache hit → `{hit:true, downloadUrl}`
+- [ ] T068 [P] [US1] Create back/tests/unit/processing/application/download-video.usecase.test.ts — mock IJobRepository, IArtifactRepository, IDownloaderPort, IStoragePort, NotifyJobUpdateUseCase; test: (a) lock acquired → full success path: downloading → upload → save artifact → ready → release lock → notify; (b) downloader throws `VIDEO_TOO_LONG` → error propagates, lock released in finally; (c) S3 upload throws → error propagates, lock released
+- [ ] T069 [P] [US3] Create back/tests/unit/processing/application/trim-video.usecase.test.ts — mock ports; verify: (a) transcoder.trim called with correct start/end; (b) S3 upload key is `trims/{videoId}/{jobId}.mp4`; (c) CacheArtifact saved with format=mp4, artifactType=trim, expiresAt≈now+86400; (d) job updated to `trimmed`; (e) notifier called
+- [ ] T070 [P] [US4] Create back/tests/unit/processing/application/create-gif.usecase.test.ts — mock ports; verify: (a) transcoder.createGif called; (b) S3 key `gifs/{videoId}/{jobId}.gif`; (c) CacheArtifact format=gif, type=gif, expiresAt≈now+86400; (d) job status → gif_created; (e) notifier called
+- [ ] T071 [P] [US4] Create back/tests/unit/processing/application/extract-mp3.usecase.test.ts — mock ports; test: (a) no range → S3 key `mp3s/originals/{videoId}/{videoId}.mp3`, artifactType=original, TTL 172800s; (b) with range → S3 key `mp3s/trims/{videoId}/{jobId}.mp3`, artifactType=trim, TTL 86400s; (c) job status → mp3_ready; (d) notifier called
+- [ ] T072 [P] [US1] Create back/tests/unit/notifications/application/notify-job-update.usecase.test.ts — mock IConnectionRepository, IWebSocketAdapter, IJobRepository; test: (a) no connections → send never called; (b) 2 connections → send called twice with `{type:"job_update", jobId, status}`; (c) one GoneException → deletes that connection, continues sending to others; (d) terminal status job with s3Key → payload includes downloadUrl
+
+### Integration Tests — DynamoDB Local
+
+- [ ] T073 Create back/tests/integration/setup.ts — export `createTestDocClient()` (endpoint `http://localhost:8000`, dummy credentials), `createTestTable(client, tableName)` (creates TrimtokTable with gsi1 GSI + TTL attribute expiresAt), `deleteTestTable(client, tableName)`; document in back/README.md that `docker run -p 8000:8000 amazon/dynamodb-local` is prerequisite for integration tests
+- [ ] T074 [P] Create back/tests/integration/jobs/infrastructure/dynamo/job.dynamo-repo.integration.test.ts — against DynamoDB Local via setup.ts: (a) save + findById roundtrip preserves all fields; (b) updateStatus sets status + updatedAt; (c) acquireLock: first call true, concurrent second call false; (d) releaseLock → subsequent acquireLock returns true; (e) expiresAt is Unix epoch number
+- [ ] T075 [P] Create back/tests/integration/jobs/infrastructure/dynamo/artifact.dynamo-repo.integration.test.ts — against DynamoDB Local: (a) save + findByKey roundtrip for all 5 SK combinations (mp4/original, mp4/trim, gif/gif, mp3/original, mp3/trim); (b) findByKey returns null for unknown key; (c) incrementDownloadCount increments from 0→1→2 atomically
+- [ ] T076 [P] Create back/tests/integration/notifications/infrastructure/dynamo/connection.dynamo-repo.integration.test.ts — against DynamoDB Local: (a) save → findByJobId returns `[]` (no subscription); (b) updateSubscription → findByJobId via GSI1 returns connection; (c) delete → findByJobId returns `[]`; (d) two connections subscribe to same jobId → findByJobId returns both
+
+**Checkpoint**: Phase 8 is complete when `pnpm test:coverage` reports ≥ 80% coverage on all domain and application source files and all integration tests pass against DynamoDB Local.
+
+---
+
 ## Final Phase: Polish & Cross-Cutting Concerns
 
 **Purpose**: Observability, CloudWatch alarms for DLQs, audit log completeness, and a final route registry check.
@@ -204,6 +245,20 @@ US5 (after surrounding phases):
   T007 → T052
   T016, T017, T018, T019, T026, T031 → T053
 
+Phase 8 Testing setup:
+  T001 → T058
+
+Unit tests (can run in parallel with their corresponding impl task):
+  T008 → T059, T060, T061;  T020 → T062
+  T015 → T063;  T033 → T064;  T039 → T065
+  T045 → T066;  T046 → T067
+  T022 → T068;  T038 → T069;  T043 → T070;  T044 → T071
+  T025 → T072
+
+Integration tests:
+  T003, T058 → T073
+  T073, T016 → T074;  T073, T017 → T075;  T073, T026 → T076
+
 Final phase (after US1-US4):
   T007 → T054, T055
   T031, T032, T034, T040, T047, T048, T049, T050 → T056, T057
@@ -237,6 +292,16 @@ All T043–T050 can run in parallel (different files, independent use cases)
 T051 is the integration checkpoint (verify SST wiring) — run after all
 ```
 
+### Phase 8 — unit tests all parallel
+
+```
+Group A (all parallel after impl tasks complete): T059, T060, T061, T062, T063, T064,
+                                                  T065, T066, T067, T068, T069, T070,
+                                                  T071, T072
+Group B (sequential setup): T073
+Group C (parallel after T073): T074, T075, T076
+```
+
 ---
 
 ## Implementation Strategy
@@ -253,7 +318,8 @@ This covers the full download-and-status-check lifecycle: accept request → asy
 | Increment 2 | 5 | Video trim via ffmpeg stream-copy, trim caching (US3) |
 | Increment 3 | 6 | GIF generation, MP3 extraction, GIF/MP3 caching (US4) |
 | Increment 4 | 7, Final | Lifecycle audit, CloudWatch alarms, observability (US5 + polish) |
+| Increment 5 | 8 | Unit + integration tests, coverage ≥ 80% on domain/application layers (Constitution VIII) |
 
-**Total tasks**: 57 (T001–T057)  
-**Parallelizable tasks**: 36 marked `[P]`  
-**Story-labeled tasks**: 47 (US1: 25, US2: 2, US3: 6, US4: 9, US5: 2, unlabeled polish: 4 + setup/foundational: 9)
+**Total tasks**: 76 (T001–T076, T035/T042 intentionally skipped)  
+**Parallelizable tasks**: 52 marked `[P]`  
+**Story-labeled tasks**: 61 (US1: 31, US2: 3, US3: 8, US4: 15, US5: 2, unlabeled: setup/foundational/polish/testing-setup)
