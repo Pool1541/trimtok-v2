@@ -108,22 +108,23 @@ El sistema limpia automáticamente los artefactos almacenados que han superado s
 - **FR-003**: El sistema DEBE propagar el progreso de un job a través de eventos que actualicen el estado persistente, garantizando que cada transición de estado sea auditable.
 - **FR-004**: El sistema DEBE soportar las siguientes transiciones de estado para un job: `pending` → `downloading` → `ready` → `trimming` → `trimmed` → `creating_gif` → `gif_created`, con estado `error` posible desde cualquier estado.
 - **FR-005**: El sistema DEBE deduplicar solicitudes de descarga concurrentes del mismo video usando un mecanismo de bloqueo distribuido, de modo que solo se ejecute un proceso de descarga por video en un momento dado.
-- **FR-006**: El sistema DEBE almacenar los artefactos procesados (videos originales, trims, GIFs) en almacenamiento duradero con políticas de expiración configurables por tipo de artefacto.
-- **FR-007**: El sistema DEBE generar URLs de descarga de acceso temporal y controladas para los artefactos almacenados.
+- **FR-006**: El sistema DEBE almacenar los artefactos procesados (videos originales MP4, trims MP4, GIFs y audios MP3) en almacenamiento duradero con políticas de expiración configurables por tipo de artefacto.
+- **FR-007**: El sistema DEBE generar URLs de descarga de acceso temporal con una validez de 1 hora desde su generación. Las URLs expiradas no deben ser accesibles.
 - **FR-008**: El sistema DEBE registrar un evento de auditoría por cada operación significativa (inicio de descarga, completado, error, trim solicitado, GIF generado).
 - **FR-009**: El sistema DEBE ejecutar automáticamente la limpieza de artefactos expirados según las reglas de retención: originales (30 días), trims (7 días), GIFs (7 días).
-- **FR-010**: El sistema DEBE exponer una API HTTP para: crear jobs, consultar estado de jobs, solicitar trim, solicitar generación de GIF.
-- **FR-011**: El sistema DEBE validar el formato y autenticidad de las URLs de TikTok antes de iniciar cualquier procesamiento.
-- **FR-012**: El sistema DEBE manejar errores de procesamiento de forma resiliente, marcando el job como `error` con un mensaje descriptivo y liberando cualquier recurso de bloqueo adquirido.
+- **FR-010**: El sistema DEBE exponer una API HTTP para: crear jobs, consultar estado de jobs, solicitar trim, solicitar generación de GIF, y solicitar extracción de audio en formato MP3.
+- **FR-011**: El sistema DEBE validar el formato y autenticidad de las URLs de TikTok antes de iniciar cualquier procesamiento. Además, DEBE rechazar videos cuya duración supere los 5 minutos, retornando un error descriptivo al usuario.
+- **FR-012**: El sistema DEBE manejar errores de procesamiento de forma resiliente: ante un fallo, DEBE realizar 1 reintento automático con backoff antes de marcar el job como `error` definitivo, liberar cualquier recurso de bloqueo adquirido y registrar el mensaje de error descriptivo.
 - **FR-013**: El sistema DEBE soportar distribución geográfica del contenido para minimizar la latencia de descarga para usuarios en diferentes regiones.
 - **FR-014**: El sistema DEBE ser completamente serverless: ningún componente de cómputo debe requerir administración de servidores, patching manual o capacidad reservada fija.
 - **FR-015**: Toda la orquestación de pasos (descarga → trim → GIF) DEBE ejecutarse mediante eventos; los pasos no deben llamarse directamente entre sí.
+- **FR-016**: La API DEBE aplicar rate limiting por dirección IP a nivel de la capa de entrada, con un umbral mínimo de 10 solicitudes por minuto para el endpoint de creación de jobs. Las solicitudes que superen el límite DEBEN recibir un error 429 con cabecera `Retry-After`.
 
 ### Key Entities
 
 - **Job**: Unidad de trabajo que representa la solicitud de procesamiento de un video. Contiene la URL de origen TikTok, estado actual, identificador de video extraído, metadatos del video (título, duración, miniatura), referencias a los artefactos generados, marcas de tiempo de trim solicitadas, registro de error, y fechas de creación y expiración.
 
-- **CacheArtifact**: Registro del índice de caché que apunta a un artefacto almacenado. Identifica de forma única un artefacto por video, formato (mp4/mp3), tipo (original/trim/gif) y rango de tiempo (trim_start/trim_end). Incluye contador de descargas, tamaño en bytes, título, miniatura, y fechas de creación y expiración.
+- **CacheArtifact**: Registro del índice de caché que apunta a un artefacto almacenado. Identifica de forma única un artefacto por video, formato (`mp4` o `mp3`), tipo (`original`, `trim`, `gif`) y rango de tiempo (trim_start/trim_end). El formato `mp3` aplica a tipos `original` y `trim`. Incluye contador de descargas, tamaño en bytes, título, miniatura, y fechas de creación y expiración.
 
 - **ProcessingEvent**: Registro de auditoría inmutable de cada operación ejecutada sobre un job. Captura tipo de operación, duración en milisegundos, resultado de caché (hit/miss), bytes procesados, marcas de tiempo de trim y contexto geográfico.
 
@@ -134,7 +135,7 @@ El sistema limpia automáticamente los artefactos almacenados que han superado s
 - **SC-001**: Los usuarios reciben un job ID en menos de 3 segundos desde que envían una URL de TikTok, independientemente del tiempo de procesamiento real del video.
 - **SC-002**: Los videos ya procesados anteriormente se entregan desde caché; el tiempo de respuesta para un caché hit es menor a 1 segundo.
 - **SC-003**: El sistema soporta al menos 500 solicitudes de creación de trabajos concurrentes sin degradar los tiempos de respuesta de la API.
-- **SC-004**: El procesamiento de un video nuevo (descarga + almacenamiento) concluye en menos de 90 segundos para videos de hasta 3 minutos de duración.
+- **SC-004**: El procesamiento de un video nuevo (descarga + almacenamiento) concluye en menos de 90 segundos para videos de hasta 5 minutos de duración.
 - **SC-005**: El sistema no incurre en costos de cómputo durante períodos de inactividad; los recursos escalan a cero cuando no hay solicitudes activas.
 - **SC-006**: La tasa de fallos de jobs por errores de infraestructura (excluyendo errores del video fuente) es menor al 1% del total de trabajos procesados.
 - **SC-007**: Los artefactos expirados son eliminados dentro de las 24 horas posteriores a su fecha de expiración.
@@ -146,9 +147,19 @@ El sistema limpia automáticamente los artefactos almacenados que han superado s
 - Los videos de TikTok son accesibles públicamente desde el entorno de ejecución del backend.
 - El sistema no requiere autenticación de usuarios para v1; las descargas son anónimas (sin cuentas de usuario).
 - El procesamiento de video (descarga, recorte, conversión a GIF) puede realizarse con herramientas disponibles en el entorno serverless, incluyendo binarios ejecutables en el runtime.
-- Los tiempos de ejecución máximos de las funciones serverless son suficientes para procesar videos de hasta 3 minutos (asumiendo hasta 15 minutos de ejecución por función configurable).
+- Los tiempos de ejecución máximos de las funciones serverless son suficientes para procesar videos de hasta 5 minutos (asumiendo hasta 15 minutos de ejecución por función configurable). Videos de mayor duración son rechazados antes del procesamiento.
 - La retención de artefactos sigue estas reglas por defecto: videos originales 30 días, trims 7 días, GIFs 7 días.
 - El modelo de datos aprovechará capacidades de almacenamiento de documentos o clave-valor escalables inherentes a la plataforma serverless, sin requerir bases de datos relacionales administradas.
 - La infraestructura se desplegará en una sola región AWS para v1, con posibilidad de expansión multi-región en el futuro.
 - El sistema de distribución de contenido (CDN) sirve artefactos directamente desde el almacenamiento sin pasar por el cómputo serverless.
 - El presupuesto de infraestructura se basa en pago por uso; se asume tráfico inicial bajo-moderado (miles de jobs por día).
+
+## Clarifications
+
+### Session 2026-04-11
+
+- Q: ¿Qué mecanismo de protección se aplicará en la API pública anónima para prevenir abuso de costos? → A: Rate limiting por IP a nivel de la capa de API de entrada (10 req/min por IP para creación de jobs), nativo de la plataforma, sin autenticación de usuario.
+- Q: ¿El formato de audio MP3 está en scope para v1? → A: Sí, MP3 como formato de salida opcional que el usuario puede solicitar tanto para el video original como para un trim.
+- Q: ¿Cuántos reintentos automáticos debe hacer el sistema ante un fallo de procesamiento antes de marcar un job como `error` definitivo? → A: 1 reintento automático con backoff; si vuelve a fallar, el job pasa a estado `error` definitivo.
+- Q: ¿Cuánto tiempo deben ser válidas las URLs de descarga de artefactos? → A: 1 hora desde su generación.
+- Q: ¿Cuál es el límite máximo de duración de video aceptado por el sistema? → A: 5 minutos; videos más largos son rechazados con un error descriptivo antes de iniciar cualquier procesamiento.
