@@ -81,13 +81,13 @@ export function TrimScreen({
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center gap-6 px-4 py-8 bg-[var(--trimtok-bg)]">
+    <main className="flex min-h-screen flex-col items-center gap-6 px-4 py-8 bg-(--trimtok-bg)">
       <div className="w-full max-w-2xl flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
-            className="text-[var(--trimtok-text-muted)] hover:bg-[var(--trimtok-surface)] hover:text-white px-2"
+            className="text-(--trimtok-text-muted) hover:bg-(--trimtok-surface) hover:text-white px-2"
             onClick={() => dispatch({ type: "BACK_TO_PREVIEW" })}
           >
             <ArrowLeft className="w-4 h-4" aria-hidden="true" />
@@ -104,7 +104,7 @@ export function TrimScreen({
           endTime={endSeconds}
         />
 
-        <p className="text-sm text-[var(--trimtok-text-muted)] leading-relaxed line-clamp-2">
+        <p className="text-sm text-(--trimtok-text-muted) leading-relaxed line-clamp-2">
           {videoData.title}
         </p>
 
@@ -124,7 +124,7 @@ export function TrimScreen({
           </TooltipProvider>
 
           {/* Marcadores de tiempo */}
-          <div className="flex justify-between text-xs text-[var(--trimtok-text-muted)]">
+          <div className="flex justify-between text-xs text-(--trimtok-text-muted)">
             <span>0:00:00</span>
             <span>Duración total: {formatHHMMSS(durationSeconds)}</span>
             <span>{formatHHMMSS(durationSeconds)}</span>
@@ -134,7 +134,7 @@ export function TrimScreen({
         {/* Campos editables INICIO / FIN */}
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
-            <label htmlFor="trim-start" className="text-xs text-[var(--trimtok-text-muted)] font-medium">
+            <label htmlFor="trim-start" className="text-xs text-(--trimtok-text-muted) font-medium">
               INICIO
             </label>
             <input
@@ -147,8 +147,8 @@ export function TrimScreen({
               }}
               onBlur={handleStartBlur}
               aria-invalid={startError ? "true" : "false"}
-              className={`px-3 py-2 rounded-md text-sm font-mono bg-[var(--trimtok-surface)] text-white border ${
-                startError ? "border-red-500" : "border-[var(--trimtok-border)]"
+              className={`px-3 py-2 rounded-md text-sm font-mono bg-(--trimtok-surface) text-white border ${
+                startError ? "border-red-500" : "border-(--trimtok-border)"
               } focus:outline-none focus:ring-1 focus:ring-white`}
             />
             {startError && (
@@ -156,7 +156,7 @@ export function TrimScreen({
             )}
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor="trim-end" className="text-xs text-[var(--trimtok-text-muted)] font-medium">
+            <label htmlFor="trim-end" className="text-xs text-(--trimtok-text-muted) font-medium">
               FIN
             </label>
             <input
@@ -169,8 +169,8 @@ export function TrimScreen({
               }}
               onBlur={handleEndBlur}
               aria-invalid={endError ? "true" : "false"}
-              className={`px-3 py-2 rounded-md text-sm font-mono bg-[var(--trimtok-surface)] text-white border ${
-                endError ? "border-red-500" : "border-[var(--trimtok-border)]"
+              className={`px-3 py-2 rounded-md text-sm font-mono bg-(--trimtok-surface) text-white border ${
+                endError ? "border-red-500" : "border-(--trimtok-border)"
               } focus:outline-none focus:ring-1 focus:ring-white`}
             />
             {endError && (
@@ -184,7 +184,7 @@ export function TrimScreen({
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
               variant="outline"
-              className="flex-1 border-[var(--trimtok-border)] bg-[var(--trimtok-surface)] text-white hover:bg-[var(--trimtok-surface)]/80 hover:text-white"
+              className="flex-1 border-(--trimtok-border) bg-(--trimtok-surface) text-white hover:bg-(--trimtok-surface)/80 hover:text-white"
               onClick={handlePreview}
             >
               <Play className="w-4 h-4" aria-hidden="true" />
@@ -192,7 +192,7 @@ export function TrimScreen({
             </Button>
             <Button
               variant="outline"
-              className="flex-1 border-[var(--trimtok-border)] bg-[var(--trimtok-surface)] text-white hover:bg-[var(--trimtok-surface)]/80 hover:text-white"
+              className="flex-1 border-(--trimtok-border) bg-(--trimtok-surface) text-white hover:bg-(--trimtok-surface)/80 hover:text-white"
               onClick={() => dispatch({ type: "CONFIRM_TRIM", mode: "video" })}
             >
               <Scissors className="w-4 h-4" aria-hidden="true" />
@@ -208,10 +208,10 @@ export function TrimScreen({
                       if (isGifDisabled) return;
                       dispatch({ type: "CONFIRM_TRIM", mode: "gif" });
                     }}
-                    className={`flex-1 border-[var(--trimtok-border)] bg-[var(--trimtok-surface)] ${
+                    className={`flex-1 border-(--trimtok-border) bg-(--trimtok-surface) ${
                       isGifDisabled
-                        ? "opacity-50 cursor-not-allowed text-[var(--trimtok-text-muted)]"
-                        : "text-white hover:bg-[var(--trimtok-surface)]/80 hover:text-white"
+                        ? "opacity-50 cursor-not-allowed text-(--trimtok-text-muted)"
+                        : "text-white hover:bg-(--trimtok-surface)/80 hover:text-white"
                     }`}
                   >
                     <Scissors className="w-4 h-4" aria-hidden="true" />
@@ -231,14 +231,14 @@ export function TrimScreen({
             {trimResult.mode === "video" ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Button
-                  className="w-full bg-[var(--trimtok-download-green)] hover:bg-[#00a844] text-black font-semibold"
+                  className="w-full bg-(--trimtok-download-green) hover:bg-[#00a844] text-black font-semibold"
                   onClick={() => console.log("download trimmed mp4")}
                 >
                   <Download className="w-4 h-4" aria-hidden="true" />
                   Descargar MP4 recortado
                 </Button>
                 <Button
-                  className="w-full bg-[var(--trimtok-download-green)] hover:bg-[#00a844] text-black font-semibold"
+                  className="w-full bg-(--trimtok-download-green) hover:bg-[#00a844] text-black font-semibold"
                   onClick={() => console.log("download trimmed mp3")}
                 >
                   <Download className="w-4 h-4" aria-hidden="true" />
@@ -247,14 +247,14 @@ export function TrimScreen({
               </div>
             ) : (
               <Button
-                className="w-full bg-[var(--trimtok-download-green)] hover:bg-[#00a844] text-black font-semibold"
+                className="w-full bg-(--trimtok-download-green) hover:bg-[#00a844] text-black font-semibold"
                 onClick={() => console.log("download gif")}
               >
                 <Download className="w-4 h-4" aria-hidden="true" />
                 Descargar GIF
               </Button>
             )}
-            <p className="text-xs text-center text-[var(--trimtok-text-muted)]">
+            <p className="text-xs text-center text-(--trimtok-text-muted)">
               Modifica la selección para restablecer los controles de recorte.
             </p>
           </div>

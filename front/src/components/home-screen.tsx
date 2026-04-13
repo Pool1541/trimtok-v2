@@ -36,7 +36,7 @@ export function HomeScreen({ dispatch }: HomeScreenProps) {
   const errorId = "url-error-message";
 
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--trimtok-bg)]">
+    <div className="flex min-h-screen flex-col bg-(--trimtok-bg)">
       {/* Encabezado con logo y slogan */}
       <header className="flex flex-col items-center pt-8 pb-2 gap-1">
         <div className="flex items-center gap-2">
@@ -45,7 +45,7 @@ export function HomeScreen({ dispatch }: HomeScreenProps) {
           </div>
           <span className="text-xl font-bold text-white">TrimTok</span>
         </div>
-        <p className="text-sm text-[var(--trimtok-text-muted)]">
+        <p className="text-sm text-(--trimtok-text-muted)">
           Descarga y recorta videos de TikTok
         </p>
       </header>
@@ -56,7 +56,7 @@ export function HomeScreen({ dispatch }: HomeScreenProps) {
           <h1 className="text-4xl font-bold text-white leading-tight">
             Descarga y recorta tus videos favoritos
           </h1>
-          <p className="text-sm text-[var(--trimtok-text-muted)]">
+          <p className="text-sm text-(--trimtok-text-muted)">
             Pega un enlace de TikTok para descargar en MP4 o MP3
           </p>
         </div>
@@ -77,8 +77,8 @@ export function HomeScreen({ dispatch }: HomeScreenProps) {
               aria-describedby={error ? errorId : undefined}
               className={
                 error
-                  ? "flex-1 border-red-500 focus-visible:ring-red-500 bg-[var(--trimtok-surface)] text-white placeholder:text-[var(--trimtok-text-muted)]"
-                  : "flex-1 bg-[var(--trimtok-surface)] text-white placeholder:text-[var(--trimtok-text-muted)] border-[var(--trimtok-border)]"
+                  ? "flex-1 border-red-500 focus-visible:ring-red-500 bg-(--trimtok-surface) text-white placeholder:text-(--trimtok-text-muted)"
+                  : "flex-1 bg-(--trimtok-surface) text-white placeholder:text-(--trimtok-text-muted) border-(--trimtok-border)"
               }
             />
             <Button

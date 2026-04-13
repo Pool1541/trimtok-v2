@@ -12,7 +12,7 @@ export default function Home() {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--trimtok-bg)] text-[var(--trimtok-text)]">
+    <div className="flex flex-col min-h-screen bg-(--trimtok-bg) text-(--trimtok-text)">
       {state.screen === "home" && <HomeScreen dispatch={dispatch} />}
       {state.screen === "downloading" && (
         <DownloadingScreen url={state.url} dispatch={dispatch} />

@@ -37,7 +37,7 @@ export function DownloadingScreen({ dispatch }: DownloadingScreenProps) {
   }, [dispatch]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--trimtok-bg)]">
+    <div className="flex min-h-screen flex-col bg-(--trimtok-bg)">
       {/* Encabezado con logo y slogan */}
       <header className="flex flex-col items-center pt-8 pb-2 gap-1">
         <div className="flex items-center gap-2">
@@ -46,7 +46,7 @@ export function DownloadingScreen({ dispatch }: DownloadingScreenProps) {
           </div>
           <span className="text-xl font-bold text-white">TrimTok</span>
         </div>
-        <p className="text-sm text-[var(--trimtok-text-muted)]">
+        <p className="text-sm text-(--trimtok-text-muted)">
           Descarga y recorta videos de TikTok
         </p>
       </header>
