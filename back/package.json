@@ -4,17 +4,34 @@
   "scripts": {
     "build": "esbuild --bundle --outfile=./dist/index.js --platform=node --target=node20 ./src/index.ts",
     "dev": "npx sst dev",
+    "destroy": "npx sst remove",
     "deploy": "run-s build zip update",
     "update": "aws lambda update-function-code --zip-file fileb://lambda.zip --function-name hello",
-    "zip": "zip -j lambda.zip dist/index.js"
+    "zip": "zip -j lambda.zip dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run tests/integration --reporter verbose"
   },
   "devDependencies": {
     "@types/aws-lambda": "8.10.161",
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
     "esbuild": "^0.21.4",
-    "npm-run-all2": "^6.2.0"
+    "npm-run-all2": "^6.2.0",
+    "vitest": "^2.0.0"
   },
   "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.0.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/s3-request-presigner": "^3.0.0",
+    "@hono/zod-validator": "^0.4.0",
     "hono": "^4.12.12",
-    "sst": "4.6.11"
+    "sst": "4.6.11",
+    "ulidx": "^2.4.1",
+    "zod": "^3.0.0"
   }
 }
