@@ -10,6 +10,51 @@ declare module "sst" {
       "type": "sst.aws.ApiGatewayV2"
       "url": string
     }
+    "ArtifactsBucket": {
+      "name": string
+      "type": "sst.aws.Bucket"
+    }
+    "DownloadDLQ": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
+    "DownloadQueue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
+    "GifDLQ": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
+    "GifQueue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
+    "Mp3DLQ": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
+    "Mp3Queue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
+    "TrimDLQ": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
+    "TrimQueue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
+    "TrimtokTable": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
+    "WsApi": {
+      "managementEndpoint": string
+      "type": "sst.aws.ApiGatewayWebSocket"
+      "url": string
+    }
   }
 }
 /// <reference path="sst-env.d.ts" />
