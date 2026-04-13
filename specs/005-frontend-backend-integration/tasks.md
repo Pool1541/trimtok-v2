@@ -32,7 +32,8 @@
 
 **⚠️ CRITICAL**: All user story implementation (Phases 3–6) depends on this phase.
 
-- [ ] T004 Fix cache-hit path in `back/src/jobs/application/create-job.usecase.ts` — on S3 artifact cache hit, construct a `Job` entity with `status: JobStatus.ready` and the matching `s3Key`, persist it via `jobRepo.save(job)`, return `{ hit: true, job, downloadUrl }` (job is no longer null)
+- [ ] T004 Fix cache-hit path in `back/src/jobs/application/create-job.usecase.ts` — on S3 artifact cache hit, construct a `Job` entity with `status: JobStatus.ready` and the matching `s3Key`, persist it via `jobRepo.upsert(job)` (or `save` with a `ConditionExpression` that tolerates an existing item) to guarantee idempotency (Constitution VI); return `{ hit: true, job, downloadUrl }` (job is no longer null)
+- [ ] T004b [P] Update backend tests for `back/src/jobs/application/create-job.usecase.ts` — add or update test cases for the cache-hit path that now persists a `Job` entity; assert that `jobRepo.upsert`/`save` is called and the result contains a non-null `job.jobId` (Constitution VIII: application layer coverage)
 - [ ] T005 Update `back/src/handlers/api/create-job.ts` — replace cache-hit response branch to always return `{ jobId: result.job.jobId, status: "ready", downloadUrl: result.downloadUrl }` so both HTTP 200 and HTTP 201 paths return `jobId`
 - [ ] T006 [P] Extend `front/src/lib/app-state.ts` — add `jobId: string` and `thumbnailUrl?: string` to `VideoData`; add `trimDownloadUrl: string | null` to `TrimState`; add `DOWNLOAD_ERROR`, `TRIM_COMPLETE`, and `TRIM_ERROR` to the `AppAction` union; implement new reducer cases
 - [ ] T007 [P] Create `front/src/lib/api-client.ts` — typed `fetch` wrappers: `createJob`, `getJob`, `requestTrim`, `requestGif`, `requestMp3`; `triggerDownload` helper for programmatic `<a>` click; `ApiError` class with `httpStatus`, `code`, `message`; export all response types (`CreateJobResponse`, `GetJobResponse`, `TrimResponse`, `GifResponse`, `Mp3Response`)
@@ -61,8 +62,8 @@
 
 **Independent Test**: On `PreviewScreen`, clicking "Descargar MP4" triggers an immediate browser file download using `videoData.videoUrl`. Clicking "Descargar MP3" shows a processing state and downloads the file when `mp3_ready` arrives via WS.
 
-- [ ] T011 [US2] Implement "Descargar MP4" button in `front/src/components/preview-screen.tsx` — replace `console.log` stub with `triggerDownload(videoData.videoUrl)`; no API call needed (presigned URL already in state)
-- [ ] T012 [US2] Implement "Descargar MP3" button in `front/src/components/preview-screen.tsx` — use `useMutation({ mutationFn: () => requestMp3(videoData.jobId, 0, videoData.durationSeconds) })`; on HTTP 200 (`mp3_ready`) call `getJob` then `triggerDownload`; on HTTP 202 activate `useJobWebSocket`, listen for `status: "mp3_ready"` → `getJob` → `triggerDownload`; show inline loading state while waiting
+- [ ] T011 [US2] Implement "Descargar MP4" button in `front/src/components/preview-screen.tsx` — replace `console.log` stub with `triggerDownload(videoData.videoUrl)`; no API call needed (presigned URL already in state); on any `ApiError` caught: show inline error message and re-enable button
+- [ ] T012 [US2] Implement "Descargar MP3" button in `front/src/components/preview-screen.tsx` — use `useMutation({ mutationFn: () => requestMp3(videoData.jobId, 0, videoData.durationSeconds) })`; on HTTP 200 (`mp3_ready`) call `getJob` then `triggerDownload`; on HTTP 202 activate `useJobWebSocket`, listen for `status: "mp3_ready"` → `getJob` → `triggerDownload`; show inline loading state while waiting; on `onError` (`ApiError` or WS timeout): show inline error message, re-enable button, and allow retry
 
 **Checkpoint**: User Stories 1 AND 2 fully functional — download and preview flows work independently.
 
@@ -74,8 +75,8 @@
 
 **Independent Test**: After selecting a trim range, clicking "Descargar MP4 recortado" calls `POST /v1/jobs/:jobId/trim`, waits for `status: "trimmed"` over WS (or uses cache-hit URL immediately), and downloads the trimmed file.
 
-- [ ] T013 [US3] Implement "Descargar MP4 recortado" in `front/src/components/trim-screen.tsx` — replace `console.log` stub with `useMutation({ mutationFn: () => requestTrim(jobId, trimStart, trimEnd) })`; on HTTP 200 (`status: "trimmed"`) call `getJob(jobId)` then `triggerDownload`; on HTTP 202 activate `useJobWebSocket`, await `status: "trimmed"` → `getJob` → `dispatch(TRIM_COMPLETE, downloadUrl)` → `triggerDownload`; disable button and show spinner while pending
-- [ ] T014 [US3] Implement "Descargar MP3 recortado" in `front/src/components/trim-screen.tsx` — replace `console.log` stub with `useMutation({ mutationFn: () => requestMp3(jobId, trimStart, trimEnd) })`; on HTTP 200 (`status: "mp3_ready"`) call `getJob(jobId)` then `triggerDownload`; on HTTP 202 activate `useJobWebSocket`, await `status: "mp3_ready"` → `getJob` → `triggerDownload`; disable button and show spinner while pending
+- [ ] T013 [US3] Implement "Descargar MP4 recortado" in `front/src/components/trim-screen.tsx` — replace `console.log` stub with `useMutation({ mutationFn: () => requestTrim(jobId, trimStart, trimEnd) })`; on HTTP 200 (`status: "trimmed"`) call `getJob(jobId)` then `triggerDownload`; on HTTP 202 activate `useJobWebSocket`, await `status: "trimmed"` → `getJob` → `dispatch(TRIM_COMPLETE, downloadUrl)` → `triggerDownload`; disable button and show spinner while pending; on `onError` (`ApiError` or WS timeout): `dispatch(TRIM_ERROR)`, show inline error, re-enable button
+- [ ] T014 [US3] Implement "Descargar MP3 recortado" in `front/src/components/trim-screen.tsx` — replace `console.log` stub with `useMutation({ mutationFn: () => requestMp3(jobId, trimStart, trimEnd) })`; on HTTP 200 (`status: "mp3_ready"`) call `getJob(jobId)` then `triggerDownload`; on HTTP 202 activate `useJobWebSocket`, await `status: "mp3_ready"` → `getJob` → `triggerDownload`; disable button and show spinner while pending; on `onError` (`ApiError` or WS timeout): `dispatch(TRIM_ERROR)`, show inline error, re-enable button
 
 **Checkpoint**: User Stories 1, 2, AND 3 all independently functional.
 
@@ -87,7 +88,7 @@
 
 **Independent Test**: After selecting a trim range ≤ 6 s, clicking "Crear GIF" eventually downloads a valid silent MP4 file.
 
-- [ ] T015 [US4] Implement "Crear GIF" button in `front/src/components/trim-screen.tsx` — replace `console.log` stub with `useMutation({ mutationFn: () => requestGif(jobId, trimStart, trimEnd) })`; on HTTP 200 (`status: "gif_created"`) call `getJob(jobId)` then `triggerDownload`; on HTTP 202 activate `useJobWebSocket`, await `status: "gif_created"` → `getJob` → `triggerDownload`; disable button and show spinner while pending
+- [ ] T015 [US4] Implement "Crear GIF" button in `front/src/components/trim-screen.tsx` — replace `console.log` stub with `useMutation({ mutationFn: () => requestGif(jobId, trimStart, trimEnd) })`; on HTTP 200 (`status: "gif_created"`) call `getJob(jobId)` then `triggerDownload`; on HTTP 202 activate `useJobWebSocket`, await `status: "gif_created"` → `getJob` → `triggerDownload`; disable button and show spinner while pending; on `onError` (`ApiError` or WS timeout): `dispatch(TRIM_ERROR)`, show inline error, re-enable button
 
 **Checkpoint**: All four user stories fully functional — complete feature is end-to-end integrated.
 
@@ -103,6 +104,7 @@
 - [ ] T019 [P] Update `front/tests/integration/trim-screen.test.tsx` — replace `MOCK_VIDEO_DATA` fixtures with updated `VideoData` shape including `jobId`
 - [ ] T020 [P] Update `front/tests/unit/app-state.test.ts` — add test cases for new reducer actions: `DOWNLOAD_ERROR`, `TRIM_COMPLETE`, `TRIM_ERROR`; update `VideoData` fixtures to include `jobId`
 - [ ] T021 Run `npm run typecheck` and `npx biome check front/src` and `npm run test` in `front/` — all checks must pass with zero errors
+- [ ] T022 [P] Create or update E2E spec in `front/tests/e2e/download-flow.spec.ts` — add test covering the full flow: TikTok URL input → `DownloadingScreen` → WS receives `status: "ready"` → `PreviewScreen` loads with real title and video URL → click "Descargar MP4" → browser download triggered (SC-004)
 
 ---
 
