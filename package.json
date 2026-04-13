@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "concurrently -n front,back -c cyan,yellow \"npm run dev --workspace=front\" \"npm run dev --workspace=back\"",
     "build": "npm run build --workspace=front && npm run build --workspace=back",
+    "destroy": "npm run destroy --workspace=back",
     "test:front": "npm run test:run --workspace=front",
     "test:e2e": "npm run test:e2e --workspace=front",
     "test:e2e:ui": "npm run test:e2e:ui --workspace=front"
