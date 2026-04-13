@@ -5,6 +5,14 @@
 **Status**: Draft
 **Input**: User description: "Integremos el frontend y el backend de trimtok, el backend ya está listo en gran medida y el frontend también, solo hace falta remover los mocks en el frontend para empezar a usar los endpoints reales expuestos por el backend"
 
+## Clarifications
+
+### Session 2026-04-13
+
+- Q: ¿El WebSocket también notifica el resultado de trim, gif y mp3, o solo la descarga inicial? → A: El WebSocket notifica **todos** los cambios de estado del job (descarga, trim, gif, mp3) — una sola conexión reutilizada por sesión.
+- Q: ¿Cuál es el shape del mensaje que el backend envía por WS al frontend? → A: `{ jobId, status, downloadUrl?, title?, duration?, thumbnailUrl?, errorMessage? }` — estructura plana con todos los campos opcionales del job; los no aplicables se omiten.
+- Q: ¿Cómo asocia el backend la conexión WS al jobId para enrutar notificaciones? → A: El frontend envía `{ action: "subscribe", jobId }` por el WebSocket tras abrirlo; el backend usa la route `subscribe` de API Gateway WebSocket para registrar la asociación.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Descargar video de TikTok (Priority: P1)
@@ -37,7 +45,7 @@ Desde la pantalla de previsualización, el usuario puede descargar el video comp
 **Acceptance Scenarios**:
 
 1. **Given** el usuario está en la pantalla de previsualización con un video listo, **When** pulsa "Descargar MP4", **Then** el navegador inicia la descarga del archivo MP4 usando la `downloadUrl` firmada de S3 obtenida del backend.
-2. **Given** el usuario pulsa "Descargar MP3", **Then** el frontend crea un nuevo job con `format: "mp3"` para el mismo video, hace polling hasta `status: "ready"` y descarga el archivo MP3.
+2. **Given** el usuario pulsa "Descargar MP3", **Then** el frontend crea un nuevo job con `format: "mp3"` para el mismo video, espera la notificación WebSocket con `status: "ready"` y descarga el archivo MP3.
 
 ---
 
@@ -52,7 +60,7 @@ Desde la pantalla de recorte, al confirmar el recorte los botones de descarga de
 **Acceptance Scenarios**:
 
 1. **Given** el usuario ha seleccionado un segmento en la pantalla de recorte y pulsado "Recortar MP4", **When** el backend responde `200 status: "trimmed"` con `downloadUrl` (cache hit), **Then** el navegador descarga el segmento MP4 recortado inmediatamente.
-2. **Given** el trim no está en cache, **When** el backend responde `202 status: "trimming"`, **Then** el frontend hace polling a `GET /v1/jobs/:jobId` hasta que `status: "trimmed"` y luego inicia la descarga automáticamente.
+2. **Given** el trim no está en cache, **When** el backend responde `202 status: "trimming"`, **Then** el frontend espera la notificación WebSocket con `status: "trimmed"` y luego inicia la descarga automáticamente.
 3. **Given** el usuario pulsa "Descargar MP3 recortado", **Then** el flujo es equivalente pero llama a `POST /v1/jobs/:jobId/mp3` con `trimStart` y `trimEnd`.
 
 ---
@@ -85,15 +93,15 @@ El botón "Crear GIF" en la pantalla de recorte debe llamar a `POST /v1/jobs/:jo
 ### Functional Requirements
 
 - **FR-001**: El frontend DEBE leer la URL base del backend desde la variable de entorno `NEXT_PUBLIC_API_URL` y la URL del WebSocket desde `NEXT_PUBLIC_WS_URL`, usando ambas en sus respectivos módulos de cliente.
-- **FR-002**: La `DownloadingScreen` DEBE reemplazar el mock de 2500ms por: (1) abrir una conexión WebSocket autenticada con el `jobId` y (2) hacer `POST /v1/jobs` con la URL del video y `format: "mp4"`.
-- **FR-003**: Cuando `POST /v1/jobs` retorne `status: "pending"` o `status: "downloading"`, el frontend DEBE esperar la notificación del backend vía WebSocket con `status: "ready"` o `status: "error"` en lugar de hacer polling HTTP.
+- **FR-002**: La `DownloadingScreen` DEBE reemplazar el mock de 2500ms por: (1) hacer `POST /v1/jobs` con la URL del video y `format: "mp4"` para obtener el `jobId`, (2) abrir una conexión WebSocket y enviar `{ action: "subscribe", jobId }` para recibir notificaciones del job.
+- **FR-003**: El frontend DEBE usar la conexión WebSocket activa como único mecanismo para recibir cambios de estado de cualquier operación asíncrona (descarga, trim, gif, mp3); no se realiza polling HTTP para awaitar resultados.
 - **FR-004**: La conexión WebSocket DEBE tener un timeout máximo de 120 segundos sin notificación de finalización; al superarlo, cerrar la conexión, mostrar un mensaje de error y permitir volver al inicio.
 - **FR-005**: Al recibir la notificación WebSocket con `status: "ready"`, el frontend DEBE poblar el estado de la aplicación con `jobId`, `title`, `duration` (como `durationSeconds`), `thumbnailUrl` y `downloadUrl` del backend.
 - **FR-006**: El `AppState` y los tipos de `AppAction` DEBEN extenderse para incluir el `jobId` activo en el estado `previewing` y `trimming`, necesario para llamadas posteriores de trim/gif.
 - **FR-007**: El botón "Descargar MP4" en `PreviewScreen` DEBE iniciar una descarga del archivo usando la `downloadUrl` del job activo, sin llamadas adicionales al backend.
-- **FR-008**: El botón "Descargar MP3" en `PreviewScreen` DEBE crear un nuevo job con `format: "mp3"` para la misma URL de TikTok y descargar el resultado cuando esté listo.
-- **FR-009**: Los botones de descarga de segmentos en `TrimScreen` DEBEN llamar a `POST /v1/jobs/:jobId/trim` con `trimStart` y `trimEnd`, y a `POST /v1/jobs/:jobId/mp3` para MP3, iniciando descarga al resolverse.
-- **FR-010**: El botón "Crear GIF" en `TrimScreen` DEBE llamar a `POST /v1/jobs/:jobId/gif` con `trimStart` y `trimEnd`, y descargar el archivo resultante cuando el backend lo tenga listo.
+- **FR-008**: El botón "Descargar MP3" en `PreviewScreen` DEBE crear un nuevo job con `format: "mp3"` para la misma URL de TikTok y descargar el resultado al recibir la notificación WebSocket con `status: "ready"`.
+- **FR-009**: Los botones de descarga de segmentos en `TrimScreen` DEBEN llamar a `POST /v1/jobs/:jobId/trim` con `trimStart` y `trimEnd` (o `POST /v1/jobs/:jobId/mp3` para MP3) e iniciar la descarga al recibir la notificación WebSocket con `status: "trimmed"` o `status: "ready"` respectivamente.
+- **FR-010**: El botón "Crear GIF" en `TrimScreen` DEBE llamar a `POST /v1/jobs/:jobId/gif` con `trimStart` y `trimEnd` e iniciar la descarga al recibir la notificación WebSocket con `status: "gif_created"`.
 - **FR-011**: Todos los errores de red y errores HTTP del backend (4xx, 5xx) DEBEN ser capturados, mostrar un mensaje legible al usuario y ofrecer volver a la pantalla de inicio.
 - **FR-012**: La conexión WebSocket DEBE cerrarse automáticamente al desmontar el componente que la inició, evitando memory leaks y conexiones fantasma.
 - **FR-013**: El archivo `front/src/lib/mock-data.ts` y los imports de `MOCK_VIDEO_DATA` en componentes DEBEN eliminarse una vez que el flujo real esté implementado.
@@ -103,7 +111,7 @@ El botón "Crear GIF" en la pantalla de recorte debe llamar a `POST /v1/jobs/:jo
 - **Job** (backend): Representa una operación de descarga o procesamiento. Campos relevantes: `jobId`, `status` (`pending` | `downloading` | `ready` | `trimming` | `trimmed` | `creating_gif` | `gif_created` | `error`), `title`, `duration`, `thumbnailUrl`, `downloadUrl`, `trimStart`, `trimEnd`, `format`, `errorMessage`.
 - **VideoData** (frontend, `app-state.ts`): Estado local del video cargado. Debe extenderse para incluir `jobId` y `thumbnailUrl` para habilitar llamadas posteriores.
 - **ApiClient** (`front/src/lib/api-client.ts`): Módulo nuevo que encapsula todos los `fetch` al backend: `createJob`, `getJob`, `requestTrim`, `requestGif`, `requestMp3`.
-- **WsClient** (`front/src/lib/ws-client.ts`): Módulo nuevo que gestiona la conexión WebSocket con el backend: apertura, recepción de notificaciones de job, cierre y manejo de errores de conexión.
+- **WsClient** (`front/src/lib/ws-client.ts`): Módulo nuevo que gestiona la conexión WebSocket con el backend. Flujo: abrir conexión → enviar `{ action: "subscribe", jobId }` → escuchar mensajes de shape `{ jobId, status, downloadUrl?, title?, duration?, thumbnailUrl?, errorMessage? }` → cerrar al desmontar. Los campos opcionales se omiten cuando no aplican al estado notificado.
 
 ## Success Criteria *(mandatory)*
 
