@@ -208,6 +208,23 @@ Estado de conexiones WebSocket activas suscritas a jobs.
 | 6 | Liberar lock | `DeleteItem` | PK=`LOCK#{videoId}`, SK=`LOCK` |
 | 7 | Obtener conexión WS por connectionId | `GetItem` | PK=`CONN#{connectionId}`, SK=`CONN` |
 | 8 | Obtener conexiones WS por jobId | `Query GSI1` | GSI1PK=`JOB#{jobId}` |
+| 9 | Incrementar contador de rate limit por IP | `UpdateItem` (ADD count 1 + conditional `count < 10`) | PK=`RATELIMIT#{ip}`, SK=`RATELIMIT`, expiresAt TTL 60s |
+
+---
+
+#### 6. RateLimitEntry
+
+Contador de solicitudes por IP para enforcement de FR-016. Creado con TTL de 60 segundos; expiración automática resetea la ventana.
+
+| Atributo | Tipo | Descripción |
+|----------|------|-------------|
+| `pk` | String | `RATELIMIT#{clientIp}` |
+| `sk` | String | `RATELIMIT` |
+| `type` | String | `"RATELIMIT"` |
+| `count` | Number | Solicitudes en la ventana actual (incremento atómico) |
+| `expiresAt` | Number | Unix timestamp, TTL 60 segundos desde primera solicitud de la ventana |
+
+**Mecanismo**: `UpdateItem` con `ADD count 1` y `ConditionExpression: count < 10`. Si la condición falla → 429. Si el ítem no existe, `UpdateItem` lo crea con count=1. TTL de 60s resetea la ventana automáticamente.
 
 ---
 

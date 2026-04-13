@@ -151,7 +151,7 @@ El sistema limpia automáticamente los artefactos almacenados que han superado s
 - La retención de artefactos en almacenamiento sigue estas reglas: videos originales y MP3 originales 48 horas; trims MP4, GIFs y MP3 de trim 24 horas. Los metadatos del job y eventos de auditoría en base de datos persisten 7 días. Estos valores se establecieron en la fase de diseño (research Decision 3) como optimización de costos frente a los valores iniciales de 30/7 días.
 - El modelo de datos aprovechará capacidades de almacenamiento de documentos o clave-valor escalables inherentes a la plataforma serverless, sin requerir bases de datos relacionales administradas.
 - La infraestructura se desplegará en una sola región AWS para v1, con posibilidad de expansión multi-región en el futuro.
-- El sistema de distribución de contenido (CDN) sirve artefactos directamente desde el almacenamiento sin pasar por el cómputo serverless.
+- En v1, los artefactos se sirven directamente desde S3 sin CDN intermediario. La integración de CDN está diferida a v2 tal como establece FR-013 *(Deferred — v2)*.
 - El presupuesto de infraestructura se basa en pago por uso; se asume tráfico inicial bajo-moderado (miles de jobs por día).
 
 ## Clarifications
