@@ -1,0 +1,14 @@
+# Ignore binaries — place them here before deploying:
+#   layers/ytdlp/bin/yt-dlp   (arm64 static build)
+#   layers/ffmpeg/bin/ffmpeg   (arm64 static build)
+#
+# Download links:
+#   yt-dlp:  https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64
+#   ffmpeg:  https://johnvansickle.com/ffmpeg/ → ffmpeg-release-arm64-static.tar.xz
+#
+# After placing the binaries:
+#   chmod +x layers/ytdlp/bin/yt-dlp
+#   chmod +x layers/ffmpeg/bin/ffmpeg
+
+ytdlp/bin/yt-dlp
+ffmpeg/bin/ffmpeg
