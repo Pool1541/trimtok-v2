@@ -49,7 +49,9 @@ export function gsi1Sk(connId: string): string {
 }
 
 export function rateLimitPk(clientIp: string): string {
-  return `RATELIMIT#${clientIp}`;
+  const now = Math.floor(Date.now() / 1000);
+  const windowId = Math.floor(now / 60);
+  return `RATELIMIT#${clientIp}#W#${windowId}`;
 }
 
 export function rateLimitSk(): string {
