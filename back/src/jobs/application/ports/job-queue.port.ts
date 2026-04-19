@@ -26,8 +26,8 @@ export interface Mp3Message {
 }
 
 export interface IJobQueuePort {
-  enqueueDownload(msg: DownloadMessage): Promise<void>;
-  enqueueTrim(msg: TrimMessage): Promise<void>;
-  enqueueGif(msg: GifMessage): Promise<void>;
-  enqueueMp3(msg: Mp3Message): Promise<void>;
+  enqueueDownload(msg: DownloadMessage, correlationId: string): Promise<void>;
+  enqueueTrim(msg: TrimMessage, correlationId: string): Promise<void>;
+  enqueueGif(msg: GifMessage, correlationId: string): Promise<void>;
+  enqueueMp3(msg: Mp3Message, correlationId: string): Promise<void>;
 }
