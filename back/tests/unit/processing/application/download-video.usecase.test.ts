@@ -45,17 +45,21 @@ describe("DownloadVideoUseCase", () => {
     );
   });
 
-  it("returns immediately when lock is not acquired (concurrent worker)", async () => {
+  it("returns false when lock is not acquired (concurrent worker)", async () => {
     mocks.jobRepo.acquireLock.mockResolvedValue(false);
 
-    await useCase.execute("job1", "https://tiktok.com/video/123", "vid123", "mp4");
+    const result = await useCase.execute("job1", "https://tiktok.com/video/123", "vid123", "mp4");
 
+    expect(result).toBe(false);
     expect(mocks.downloader.downloadVideo).not.toHaveBeenCalled();
     expect(mocks.jobRepo.updateStatus).not.toHaveBeenCalled();
+    expect(mocks.notifier.execute).not.toHaveBeenCalled();
   });
 
-  it("executes full success path when lock acquired", async () => {
-    await useCase.execute("job1", "https://tiktok.com/video/123", "vid123", "mp4");
+  it("returns true and executes full success path when lock acquired", async () => {
+    const result = await useCase.execute("job1", "https://tiktok.com/video/123", "vid123", "mp4");
+
+    expect(result).toBe(true);
 
     expect(mocks.jobRepo.updateStatus).toHaveBeenCalledWith("job1", JobStatus.downloading);
     expect(mocks.downloader.downloadVideo).toHaveBeenCalledOnce();

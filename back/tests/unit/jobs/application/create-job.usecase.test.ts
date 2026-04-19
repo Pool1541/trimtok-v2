@@ -60,7 +60,7 @@ describe("CreateJobUseCase", () => {
     expect(mocks.queuePort.enqueueDownload).toHaveBeenCalledOnce();
   });
 
-  it("returns cache hit with presigned URL when artifact exists in S3", async () => {
+  it("returns cache hit with presigned URL and persists a Job entity when artifact exists in S3", async () => {
     const fakeArtifact = { s3Key: "originals/abc/abc.mp4" };
     mocks.artifactRepo.findByKey.mockResolvedValue(fakeArtifact);
     mocks.storage.objectExists.mockResolvedValue(true);
@@ -69,7 +69,10 @@ describe("CreateJobUseCase", () => {
     const result = await useCase.execute("https://tiktok.com/@user/video/123456789");
     expect(result.hit).toBe(true);
     expect(result.downloadUrl).toBe("https://s3.example.com/signed");
-    expect(mocks.jobRepo.save).not.toHaveBeenCalled();
+    // T004b: cache-hit path now persists a Job entity so downstream calls have a valid jobId
+    expect(result.job).not.toBeNull();
+    expect(result.job.jobId).toBeDefined();
+    expect(mocks.jobRepo.save).toHaveBeenCalledOnce();
   });
 
   it("falls through to cache miss when artifact exists in DB but not in S3", async () => {
