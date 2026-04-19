@@ -17,12 +17,16 @@ export class DownloadVideoUseCase {
     private readonly notifier: INotifyJobUpdateUseCase,
   ) {}
 
-  async execute(jobId: string, tiktokUrl: string, videoId: string, format: "mp4" | "mp3"): Promise<void> {
-    // (1) Acquire lock — return if concurrent
+  /**
+   * Returns `true` when the job was fully processed, `false` when the lock
+   * could not be acquired (another worker is already downloading the same video).
+   * Callers should treat `false` as a retriable failure (add to SQS batchItemFailures).
+   */
+  async execute(jobId: string, tiktokUrl: string, videoId: string, format: "mp4" | "mp3"): Promise<boolean> {
+    // (1) Acquire lock — return false if concurrent worker holds it
     const acquired = await this.jobRepo.acquireLock(videoId, jobId);
     if (!acquired) {
-      // Another worker holds the lock. SQS will requeue this message after visibilityTimeout.
-      return;
+      return false;
     }
 
     try {
@@ -71,6 +75,7 @@ export class DownloadVideoUseCase {
 
       // (8) Notify WS subscribers
       await this.notifier.execute(jobId);
+      return true;
     } catch (err) {
       // Always attempt lock release on error
       await this.jobRepo.releaseLock(videoId).catch(() => { /* best-effort */ });
