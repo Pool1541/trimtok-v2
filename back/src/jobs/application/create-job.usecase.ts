@@ -1,4 +1,5 @@
 import { createJob } from "../domain/job.entity.js";
+import { JobStatus } from "../domain/job-status.js";
 import { invalidUrl } from "../../shared/errors.js";
 import type { IJobRepository } from "./ports/job.repository.js";
 import type { IArtifactRepository } from "./ports/artifact.repository.js";
@@ -39,7 +40,7 @@ import { ulid } from "ulidx";
 export interface CreateJobResult {
   hit: boolean;
   downloadUrl?: string;
-  job: Job | null;
+  job: Job;
 }
 
 export class CreateJobUseCase {
@@ -50,7 +51,7 @@ export class CreateJobUseCase {
     private readonly storage: IStoragePort,
   ) {}
 
-  async execute(tiktokUrl: string, format: "mp4" | "mp3" = "mp4"): Promise<CreateJobResult> {
+  async execute(tiktokUrl: string, format: "mp4" | "mp3" = "mp4", correlationId: string): Promise<CreateJobResult> {
     if (!isValidTiktokUrl(tiktokUrl)) {
       throw invalidUrl();
     }
@@ -64,7 +65,12 @@ export class CreateJobUseCase {
       if (exists) {
         const downloadUrl = await this.storage.generatePresignedUrl(artifact.s3Key, 3600);
         await this.artifactRepo.incrementDownloadCount(videoId, format, "original");
-        return { hit: true, downloadUrl, job: null };
+        // Persist a Job entity so downstream calls (/trim, /gif, /mp3) have a valid jobId.
+        // PutCommand overwrites silently — idempotent by design (Constitution VI).
+        const hitJob = createJob({ tiktokUrl, format, videoId });
+        Object.assign(hitJob, { status: JobStatus.ready, s3Key: artifact.s3Key });
+        await this.jobRepo.save(hitJob);
+        return { hit: true, downloadUrl, job: hitJob };
       }
       // S3 object expired — fall through to cache miss
     }
@@ -72,7 +78,7 @@ export class CreateJobUseCase {
     // Cache miss — create job and enqueue
     const job = createJob({ tiktokUrl, format, videoId });
     await this.jobRepo.save(job);
-    await this.queuePort.enqueueDownload({ jobId: job.jobId, tiktokUrl, format });
+    await this.queuePort.enqueueDownload({ jobId: job.jobId, tiktokUrl, format }, correlationId);
 
     return { hit: false, job };
   }
