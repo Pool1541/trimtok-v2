@@ -41,7 +41,7 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
           src={src}
           controls
           onTimeUpdate={handleTimeUpdate}
-          className="w-full rounded-md bg-black"
+          className="w-full rounded-md bg-black aspect-672/600"
         >
           Tu navegador no soporta la reproducción de video.
         </video>
