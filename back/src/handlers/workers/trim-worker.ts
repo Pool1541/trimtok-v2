@@ -12,8 +12,10 @@ import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { processingEventSk, jobPk } from "../../shared/table-keys.js";
 import { ulid } from "ulidx";
 import { JobStatus } from "../../jobs/domain/job-status.js";
+import { createLogger, withSqsRecordContext, setJobId } from "../../shared/logger/index.js";
 
 const EVENT_TTL = 7 * 24 * 3600;
+const logger = createLogger("workers/trim-worker");
 
 async function writeEvent(jobId: string, eventType: string): Promise<void> {
   const now = new Date().toISOString();
@@ -37,43 +39,56 @@ export const handler: SQSHandler = async (event): Promise<SQSBatchResponse> => {
   const batchItemFailures: { itemIdentifier: string }[] = [];
 
   for (const record of event.Records) {
-    const msg = JSON.parse(record.body) as {
-      jobId: string;
-      videoId: string;
-      trimStart: number;
-      trimEnd: number;
-    };
+    await withSqsRecordContext(record, "workers/trim-worker", async () => {
+      const msg = JSON.parse(record.body) as {
+        jobId: string;
+        videoId: string;
+        s3Key: string;
+        trimStart: number;
+        trimEnd: number;
+      };
 
-    const jobRepo = new JobDynamoRepo();
-    const job = await jobRepo.findById(msg.jobId).catch(() => null);
-    if (!job?.s3Key) continue;
+      setJobId(msg.jobId);
 
-    const useCase = new TrimVideoUseCase(
-      jobRepo,
-      new ArtifactDynamoRepo(),
-      new FfmpegAdapter(),
-      new ArtifactStorageAdapter(),
-      new NotifyJobUpdateUseCase(new ConnectionDynamoRepo(), new WebSocketAdapter(), jobRepo),
-    );
-
-    try {
-      await writeEvent(msg.jobId, "trim_started");
-      await useCase.execute(msg.jobId, msg.videoId, job.s3Key, msg.trimStart, msg.trimEnd);
-      await writeEvent(msg.jobId, "trim_completed");
-    } catch (err) {
-      if (job.retryCount < 1) {
-        await jobRepo.updateStatus(msg.jobId, job.status, { retryCount: job.retryCount + 1 });
-        batchItemFailures.push({ itemIdentifier: record.messageId });
-      } else {
-        await jobRepo.updateStatus(msg.jobId, JobStatus.error, {
-          errorMessage: err instanceof Error ? err.message : String(err),
-        }).catch(() => { /* best-effort */ });
-        await writeEvent(msg.jobId, "trim_failed").catch(() => { /* best-effort */ });
-        await new NotifyJobUpdateUseCase(
-          new ConnectionDynamoRepo(), new WebSocketAdapter(), new JobDynamoRepo()
-        ).execute(msg.jobId).catch(() => { /* best-effort */ });
+      const jobRepo = new JobDynamoRepo();
+      const job = await jobRepo.findById(msg.jobId).catch(() => null);
+      if (!job) {
+        logger.warn("job not found, skipping");
+        return;
       }
-    }
+
+      const useCase = new TrimVideoUseCase(
+        jobRepo,
+        new ArtifactDynamoRepo(),
+        new FfmpegAdapter(),
+        new ArtifactStorageAdapter(),
+        new NotifyJobUpdateUseCase(new ConnectionDynamoRepo(), new WebSocketAdapter(), jobRepo),
+      );
+
+      try {
+        logger.debug("trim_started");
+        await writeEvent(msg.jobId, "trim_started");
+        await useCase.execute(msg.jobId, msg.videoId, msg.s3Key, msg.trimStart, msg.trimEnd);
+        await writeEvent(msg.jobId, "trim_completed");
+        logger.info("trim completed");
+      } catch (err) {
+        logger.error({ err }, "error processing trim");
+        if (job.retryCount < 1) {
+          logger.warn({ retryCount: job.retryCount }, "scheduling retry");
+          await jobRepo.updateStatus(msg.jobId, job.status, { retryCount: job.retryCount + 1 });
+          batchItemFailures.push({ itemIdentifier: record.messageId });
+        } else {
+          logger.error("max retries reached, marking job as failed");
+          await jobRepo.updateStatus(msg.jobId, JobStatus.error, {
+            errorMessage: err instanceof Error ? err.message : String(err),
+          }).catch((e) => logger.error({ err: e }, "failed to update status"));
+          await writeEvent(msg.jobId, "trim_failed").catch((e) => logger.error({ err: e }, "failed to write trim_failed event"));
+          await new NotifyJobUpdateUseCase(
+            new ConnectionDynamoRepo(), new WebSocketAdapter(), new JobDynamoRepo()
+          ).execute(msg.jobId).catch((e) => logger.error({ err: e }, "failed to send error notification"));
+        }
+      }
+    });
   }
 
   return { batchItemFailures };

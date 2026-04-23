@@ -8,12 +8,16 @@ import { ArtifactStorageAdapter } from "../../jobs/infrastructure/s3/artifact-st
 import { JobQueueAdapter } from "../../jobs/infrastructure/sqs/job-queue.adapter.js";
 import { RequestMp3UseCase } from "../../jobs/application/request-mp3.usecase.js";
 import type { AppError } from "../../shared/errors.js";
+import { correlationMiddleware, createLogger } from "../../shared/logger/index.js";
 
 const app = new Hono();
+const logger = createLogger("api/request-mp3");
+
+app.use(correlationMiddleware("api/request-mp3"));
 
 const schema = z.object({
-  trimStart: z.number().min(0).optional(),
-  trimEnd: z.number().positive().optional(),
+  trimStart: z.number().min(0).transform(Math.floor).optional(),
+  trimEnd: z.number().positive().transform(Math.floor).optional(),
 });
 
 app.post(
@@ -34,17 +38,22 @@ app.post(
       new ArtifactStorageAdapter(),
     );
 
+    logger.debug({ jobId, trimStart, trimEnd }, "request-mp3");
     try {
       const result = await useCase.execute(jobId, trimStart, trimEnd);
       if (result.hit) {
+        logger.info({ jobId, hit: true }, "mp3 cache hit");
         return c.json({ status: "mp3_ready", downloadUrl: result.downloadUrl }, 200);
       }
-      return c.json({ status: "creating_mp3" }, 202);
+      logger.info({ jobId, childJobId: result.childJobId }, "mp3 enqueued");
+      return c.json({ status: "creating_mp3", jobId: result.childJobId }, 202);
     } catch (err) {
       const e = err as AppError;
       if (e.name === "AppError") {
+        logger.warn({ jobId, code: e.code }, e.message);
         return c.json({ error: { code: e.code, message: e.message } }, e.httpStatus as 400 | 404 | 409);
       }
+      logger.error({ jobId, err }, "unhandled error in request-mp3");
       throw err;
     }
   },

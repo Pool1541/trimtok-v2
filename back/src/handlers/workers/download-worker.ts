@@ -13,6 +13,7 @@ import { processingEventSk, jobPk } from "../../shared/table-keys.js";
 import { ulid } from "ulidx";
 import { JobStatus } from "../../jobs/domain/job-status.js";
 import { AppError, ErrorCode } from "../../shared/errors.js";
+import { createLogger, withSqsRecordContext, setJobId } from "../../shared/logger/index.js";
 
 const NON_RETRIABLE_CODES = new Set<ErrorCode>([
   ErrorCode.VIDEO_TOO_LONG,
@@ -20,6 +21,7 @@ const NON_RETRIABLE_CODES = new Set<ErrorCode>([
 ]);
 
 const EVENT_TTL = 7 * 24 * 3600;
+const logger = createLogger("workers/download-worker");
 
 async function writeEvent(jobId: string, eventType: string): Promise<void> {
   const now = new Date().toISOString();
@@ -40,98 +42,96 @@ async function writeEvent(jobId: string, eventType: string): Promise<void> {
 }
 
 export const handler: SQSHandler = async (event): Promise<SQSBatchResponse> => {
-  console.log("[download-worker] handler invoked, records:", event.Records.length);
+  logger.info({ count: event.Records.length }, "batch received");
   const batchItemFailures: { itemIdentifier: string }[] = [];
 
   for (const record of event.Records) {
-    const correlationId = record.messageAttributes?.CorrelationId?.stringValue ?? "unknown";
-    let msg: { jobId: string; tiktokUrl: string; format: "mp4" | "mp3" };
-    try {
-      msg = JSON.parse(record.body) as typeof msg;
-    } catch (parseErr) {
-      console.error("[download-worker] Failed to parse SQS message body:", record.body, parseErr, { correlationId });
-      continue;
-    }
-
-    console.log("[download-worker] Processing message:", { jobId: msg.jobId, tiktokUrl: msg.tiktokUrl, format: msg.format, correlationId });
-
-    const jobRepo = new JobDynamoRepo();
-    const artifactRepo = new ArtifactDynamoRepo();
-    const storage = new ArtifactStorageAdapter();
-    const downloader = new YtDlpAdapter();
-    const connRepo = new ConnectionDynamoRepo();
-    const wsAdapter = new WebSocketAdapter();
-    const notifier = new NotifyJobUpdateUseCase(connRepo, wsAdapter, jobRepo);
-    const useCase = new DownloadVideoUseCase(jobRepo, artifactRepo, downloader, storage, notifier);
-
-    try {
-      console.log("[download-worker] Fetching job from DB:", { jobId: msg.jobId, correlationId });
-      const job = await jobRepo.findById(msg.jobId);
-      if (!job) {
-        console.warn("[download-worker] Job not found in DB, skipping:", { jobId: msg.jobId, correlationId });
-        continue;
-      }
-      console.log("[download-worker] Job found:", { status: job.status, retryCount: job.retryCount, videoId: job.videoId, correlationId });
-
-      const videoId = job.videoId ?? msg.jobId;
-      console.log("[download-worker] Writing download_started event", { correlationId });
-      await writeEvent(msg.jobId, "download_started");
-
-      console.log("[download-worker] Executing DownloadVideoUseCase");
-      const processed = await useCase.execute(msg.jobId, msg.tiktokUrl, videoId, msg.format);
-
-      if (!processed) {
-        // Lock not acquired — another worker is already downloading this video.
-        // Retry via SQS batchItemFailures so the job is not left stuck in "pending".
-        console.warn("[download-worker] Lock not acquired for job, scheduling SQS retry:", { jobId: msg.jobId, correlationId });
-        batchItemFailures.push({ itemIdentifier: record.messageId });
-        continue;
+    await withSqsRecordContext(record, "workers/download-worker", async () => {
+      let msg: { jobId: string; tiktokUrl: string; format: "mp4" | "mp3" };
+      try {
+        msg = JSON.parse(record.body) as typeof msg;
+      } catch (parseErr) {
+        logger.error({ body: record.body, err: parseErr }, "failed to parse SQS message body");
+        return;
       }
 
-      console.log("[download-worker] DownloadVideoUseCase completed successfully");
-      await writeEvent(msg.jobId, "download_completed");
-      // NOTE: notifier.execute() was already called inside DownloadVideoUseCase — do NOT call it again.
-      console.log("[download-worker] Job finished successfully:", { jobId: msg.jobId, correlationId });
-    } catch (err) {
-      console.error("[download-worker] Error processing job:", { jobId: msg.jobId, correlationId, error: err instanceof Error ? { message: err.message, stack: err.stack } : String(err) });
+      setJobId(msg.jobId);
+      logger.info({ tiktokUrl: msg.tiktokUrl, format: msg.format }, "processing message");
 
-      const isNonRetriable = err instanceof AppError && NON_RETRIABLE_CODES.has(err.code);
+      const jobRepo = new JobDynamoRepo();
+      const artifactRepo = new ArtifactDynamoRepo();
+      const storage = new ArtifactStorageAdapter();
+      const downloader = new YtDlpAdapter();
+      const connRepo = new ConnectionDynamoRepo();
+      const wsAdapter = new WebSocketAdapter();
+      const notifier = new NotifyJobUpdateUseCase(connRepo, wsAdapter, jobRepo);
+      const useCase = new DownloadVideoUseCase(jobRepo, artifactRepo, downloader, storage, notifier);
 
-      if (isNonRetriable) {
-        console.error("[download-worker] Non-retriable error (", err.code, "), marking job as error immediately:", { jobId: msg.jobId, correlationId });
-        await new JobDynamoRepo().updateStatus(msg.jobId, JobStatus.error, {
-          errorMessage: err.message,
-        }).catch((e) => console.error("[download-worker] Failed to update job status to error:", { jobId: msg.jobId, correlationId, error: e }));
-        await writeEvent(msg.jobId, "download_failed").catch((e) => console.error("[download-worker] Failed to write download_failed event:", { jobId: msg.jobId, correlationId, error: e }));
-        await new NotifyJobUpdateUseCase(
-          new ConnectionDynamoRepo(),
-          new WebSocketAdapter(),
-          new JobDynamoRepo(),
-        ).execute(msg.jobId).catch((e) => console.error("[download-worker] Failed to send error notification:", { jobId: msg.jobId, correlationId, error: e }));
-      } else {
-        const job = await new JobDynamoRepo().findById(msg.jobId).catch(() => null);
-        if (job && job.retryCount < 1) {
-          console.warn("[download-worker] Scheduling retry (retryCount:", job.retryCount, ") for job:", { jobId: msg.jobId, correlationId });
-          await new JobDynamoRepo().updateStatus(msg.jobId, job.status, {
-            retryCount: job.retryCount + 1,
-          }).catch((e) => console.error("[download-worker] Failed to update retryCount:", { jobId: msg.jobId, correlationId, error: e }));
+      try {
+        logger.debug("fetching job from DB");
+        const job = await jobRepo.findById(msg.jobId);
+        if (!job) {
+          logger.warn("job not found in DB, skipping");
+          return;
+        }
+        logger.debug({ status: job.status, retryCount: job.retryCount, videoId: job.videoId }, "job found");
+
+        const videoId = job.videoId ?? msg.jobId;
+        logger.debug("writing download_started event");
+        await writeEvent(msg.jobId, "download_started");
+
+        logger.debug("executing DownloadVideoUseCase");
+        const processed = await useCase.execute(msg.jobId, msg.tiktokUrl, videoId, msg.format);
+
+        if (!processed) {
+          logger.warn("lock not acquired, scheduling SQS retry");
           batchItemFailures.push({ itemIdentifier: record.messageId });
-        } else {
-          console.error("[download-worker] Max retries reached, marking job as error:", { jobId: msg.jobId, correlationId });
+          return;
+        }
+
+        await writeEvent(msg.jobId, "download_completed");
+        logger.info("job finished successfully");
+      } catch (err) {
+        logger.error({ err }, "error processing job");
+
+        const isNonRetriable = err instanceof AppError && NON_RETRIABLE_CODES.has(err.code);
+
+        if (isNonRetriable) {
+          logger.error({ code: (err as AppError).code }, "non-retriable error, marking job as failed");
           await new JobDynamoRepo().updateStatus(msg.jobId, JobStatus.error, {
-            errorMessage: err instanceof Error ? err.message : String(err),
-          }).catch((e) => console.error("[download-worker] Failed to update job status to error:", { jobId: msg.jobId, correlationId, error: e }));
-          await writeEvent(msg.jobId, "download_failed").catch((e) => console.error("[download-worker] Failed to write download_failed event:", { jobId: msg.jobId, correlationId, error: e }));
+            errorMessage: (err as AppError).message,
+          }).catch((e) => logger.error({ err: e }, "failed to update job status to error"));
+          await writeEvent(msg.jobId, "download_failed").catch((e) => logger.error({ err: e }, "failed to write download_failed event"));
           await new NotifyJobUpdateUseCase(
             new ConnectionDynamoRepo(),
             new WebSocketAdapter(),
             new JobDynamoRepo(),
-          ).execute(msg.jobId).catch((e) => console.error("[download-worker] Failed to send error notification:", { jobId: msg.jobId, correlationId, error: e }));
+          ).execute(msg.jobId).catch((e) => logger.error({ err: e }, "failed to send error notification"));
+        } else {
+          const job = await new JobDynamoRepo().findById(msg.jobId).catch(() => null);
+          if (job && job.retryCount < 1) {
+            logger.warn({ retryCount: job.retryCount }, "scheduling retry");
+            await new JobDynamoRepo().updateStatus(msg.jobId, job.status, {
+              retryCount: job.retryCount + 1,
+            }).catch((e) => logger.error({ err: e }, "failed to update retryCount"));
+            batchItemFailures.push({ itemIdentifier: record.messageId });
+          } else {
+            logger.error("max retries reached, marking job as failed");
+            await new JobDynamoRepo().updateStatus(msg.jobId, JobStatus.error, {
+              errorMessage: err instanceof Error ? err.message : String(err),
+            }).catch((e) => logger.error({ err: e }, "failed to update job status to error"));
+            await writeEvent(msg.jobId, "download_failed").catch((e) => logger.error({ err: e }, "failed to write download_failed event"));
+            await new NotifyJobUpdateUseCase(
+              new ConnectionDynamoRepo(),
+              new WebSocketAdapter(),
+              new JobDynamoRepo(),
+            ).execute(msg.jobId).catch((e) => logger.error({ err: e }, "failed to send error notification"));
+          }
         }
       }
-    }
+    });
   }
 
-  console.log("[download-worker] Batch done, failures:", batchItemFailures.length);
+  logger.debug({ failures: batchItemFailures.length }, "batch done");
   return { batchItemFailures };
 };

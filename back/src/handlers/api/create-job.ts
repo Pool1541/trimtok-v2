@@ -2,7 +2,6 @@ import { Hono, Context } from "hono";
 import { handle } from "hono/aws-lambda";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { JobDynamoRepo } from "../../jobs/infrastructure/dynamo/job.dynamo-repo.js";
 import { ArtifactDynamoRepo } from "../../jobs/infrastructure/dynamo/artifact.dynamo-repo.js";
 import { ArtifactStorageAdapter } from "../../jobs/infrastructure/s3/artifact-storage.adapter.js";
@@ -14,8 +13,12 @@ import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { rateLimitExceeded } from "../../shared/errors.js";
 import { rateLimitPk, rateLimitSk } from "../../shared/table-keys.js";
 import type { AppError } from "../../shared/errors.js";
+import { correlationMiddleware, getContext, createLogger } from "../../shared/logger/index.js";
 
 const app = new Hono();
+const logger = createLogger("api/create-job");
+
+app.use(correlationMiddleware("api/create-job"));
 
 const schema = z.object({
   tiktokUrl: z.string().url(),
@@ -39,7 +42,7 @@ app.post(
       requestContext?.identity?.sourceIp ??
       "unknown";
 
-    const correlationId = randomUUID();
+    const correlationId = getContext()!.correlationId;
 
     try {
       await getDynamoClient().send(
@@ -70,6 +73,7 @@ app.post(
       );
     } catch (err) {
       if (err instanceof ConditionalCheckFailedException) {
+        logger.warn({ clientIp }, "rate limit exceeded");
         const e = rateLimitExceeded();
         return c.json({ error: { code: e.code } }, 429, { "Retry-After": "60" });
       }
@@ -77,6 +81,7 @@ app.post(
     }
 
     const body = c.req.valid("json");
+    logger.info({ tiktokUrl: body.tiktokUrl, format: body.format }, "create-job request");
     const useCase = new CreateJobUseCase(
       new JobDynamoRepo(),
       new ArtifactDynamoRepo(),
@@ -87,15 +92,19 @@ app.post(
     try {
       const result = await useCase.execute(body.tiktokUrl, body.format, correlationId);
       if (result.hit) {
+        logger.info({ jobId: result.job.jobId, hit: true }, "cache hit");
         return c.json({ jobId: result.job.jobId, status: "ready" as const, downloadUrl: result.downloadUrl }, 200);
       }
       const job = result.job;
+      logger.info({ jobId: job.jobId, status: job.status }, "job created");
       return c.json({ jobId: job.jobId, status: job.status }, 201);
     } catch (err) {
       const e = err as AppError;
       if (e.name === "AppError") {
+        logger.warn({ code: e.code }, e.message);
         return c.json({ error: { code: e.code, message: e.message } }, e.httpStatus as 400 | 422);
       }
+      logger.error({ err }, "unhandled error in create-job");
       throw err;
     }
   },

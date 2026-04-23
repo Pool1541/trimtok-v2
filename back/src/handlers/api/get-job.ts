@@ -4,8 +4,12 @@ import { JobDynamoRepo } from "../../jobs/infrastructure/dynamo/job.dynamo-repo.
 import { ArtifactStorageAdapter } from "../../jobs/infrastructure/s3/artifact-storage.adapter.js";
 import { GetJobUseCase } from "../../jobs/application/get-job.usecase.js";
 import type { AppError } from "../../shared/errors.js";
+import { correlationMiddleware, createLogger } from "../../shared/logger/index.js";
 
 const app = new Hono();
+const logger = createLogger("api/get-job");
+
+app.use(correlationMiddleware("api/get-job"));
 
 app.get("/v1/jobs/:jobId", async (c) => {
   const jobId = c.req.param("jobId");
@@ -14,6 +18,7 @@ app.get("/v1/jobs/:jobId", async (c) => {
   const useCase = new GetJobUseCase(new JobDynamoRepo(), new ArtifactStorageAdapter());
 
   try {
+    logger.debug({ jobId }, "get-job request");
     const { job, downloadUrl } = await useCase.execute(jobId);
     return c.json({
       jobId: job.jobId,
@@ -32,8 +37,10 @@ app.get("/v1/jobs/:jobId", async (c) => {
   } catch (err) {
     const e = err as AppError;
     if (e.name === "AppError") {
+      logger.warn({ jobId, code: e.code }, e.message);
       return c.json({ error: { code: e.code, message: e.message } }, e.httpStatus as 404);
     }
+    logger.error({ jobId, err }, "unhandled error in get-job");
     throw err;
   }
 });
