@@ -51,7 +51,7 @@ export class CreateJobUseCase {
     private readonly storage: IStoragePort,
   ) {}
 
-  async execute(tiktokUrl: string, format: "mp4" | "mp3" = "mp4", correlationId: string): Promise<CreateJobResult> {
+  async execute(tiktokUrl: string, format: "mp4" | "mp3" = "mp4", correlationId?: string): Promise<CreateJobResult> {
     if (!isValidTiktokUrl(tiktokUrl)) {
       throw invalidUrl();
     }
@@ -68,7 +68,13 @@ export class CreateJobUseCase {
         // Persist a Job entity so downstream calls (/trim, /gif, /mp3) have a valid jobId.
         // PutCommand overwrites silently — idempotent by design (Constitution VI).
         const hitJob = createJob({ tiktokUrl, format, videoId });
-        Object.assign(hitJob, { status: JobStatus.ready, s3Key: artifact.s3Key });
+        Object.assign(hitJob, {
+          status: JobStatus.ready,
+          s3Key: artifact.s3Key,
+          duration: artifact.duration,
+          title: artifact.title,
+          thumbnailUrl: artifact.thumbnailUrl,
+        });
         await this.jobRepo.save(hitJob);
         return { hit: true, downloadUrl, job: hitJob };
       }
