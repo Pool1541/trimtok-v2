@@ -13,7 +13,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-(--trimtok-bg) text-(--trimtok-text)">
-      {state.screen === "home" && <HomeScreen dispatch={dispatch} />}
+      {state.screen === "home" && <HomeScreen dispatch={dispatch} errorMessage={state.errorMessage} />}
       {state.screen === "downloading" && (
         <DownloadingScreen url={state.url} dispatch={dispatch} />
       )}
