@@ -10,10 +10,11 @@ import type { AppAction } from "@/lib/app-state";
 
 interface HomeScreenProps {
   dispatch: (action: AppAction) => void;
+  errorMessage?: string;
 }
 
 // FR-001, FR-002, FR-003: Pantalla principal con validación de URL de TikTok
-export function HomeScreen({ dispatch }: HomeScreenProps) {
+export function HomeScreen({ dispatch, errorMessage }: HomeScreenProps) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -96,6 +97,15 @@ export function HomeScreen({ dispatch }: HomeScreenProps) {
               className="text-sm text-red-500 px-1"
             >
               {error}
+            </p>
+          )}
+          {errorMessage && (
+            <p
+              role="alert"
+              data-testid="download-error-message"
+              className="text-sm text-red-400 px-1"
+            >
+              {errorMessage}
             </p>
           )}
         </form>
