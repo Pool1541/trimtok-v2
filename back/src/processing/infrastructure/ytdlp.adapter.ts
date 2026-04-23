@@ -20,7 +20,7 @@ export class YtDlpAdapter implements IDownloaderPort {
       "-f", "bv*[vcodec~='^(h264|avc)'][ext=mp4]+ba[ext=m4a]/bv*[vcodec~='^(h264|avc)']+ba/b[vcodec~='^(h264|avc)']/bv*+ba/b",
       "--merge-output-format", "mp4",
       "--recode-video", "mp4",
-      "--postprocessor-args", "ffmpeg:-c:v libx264 -c:a aac -movflags +faststart",
+      "--postprocessor-args", "ffmpeg:-c:v libopenh264 -c:a aac -movflags +faststart",
       "-P", destDir,
       "-o", "%(id)s.%(ext)s",
       url,
