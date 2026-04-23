@@ -11,6 +11,10 @@ export interface VideoData {
   durationSeconds: number;
   /** URL original de TikTok ingresada por el usuario. */
   sourceUrl: string;
+  /** jobId del backend. Necesario para llamadas a /trim, /gif, /mp3. */
+  jobId: string;
+  /** URL de la miniatura del video. Opcional según disponibilidad en el backend. */
+  thumbnailUrl?: string;
 }
 
 export interface TrimSelection {
@@ -33,6 +37,7 @@ export interface TrimResult {
 
 export interface HomeState {
   screen: "home";
+  errorMessage?: string;
 }
 
 export interface DownloadingState {
@@ -55,6 +60,10 @@ export interface TrimState {
    * Se pone en null cuando el usuario mueve el slider o edita los campos de tiempo.
    */
   trimResult: TrimResult | null;
+  /** URL de descarga resultado de la última operación de trim/gif/mp3. Null mientras espera. */
+  trimDownloadUrl: string | null;
+  /** Mensaje de error si la última operación de trim/gif/mp3 falló. */
+  trimError: string | null;
 }
 
 export type AppState = HomeState | DownloadingState | PreviewState | TrimState;
@@ -64,9 +73,12 @@ export type AppState = HomeState | DownloadingState | PreviewState | TrimState;
 export type AppAction =
   | { type: "START_DOWNLOAD"; url: string }
   | { type: "DOWNLOAD_COMPLETE"; videoData: VideoData }
+  | { type: "DOWNLOAD_ERROR"; message: string }
   | { type: "OPEN_TRIM" }
   | { type: "UPDATE_TRIM_SELECTION"; selection: TrimSelection }
   | { type: "CONFIRM_TRIM"; mode: TrimMode }
+  | { type: "TRIM_COMPLETE"; downloadUrl: string }
+  | { type: "TRIM_ERROR"; message: string }
   | { type: "BACK_TO_PREVIEW" }
   | { type: "RESET" };
 
@@ -95,6 +107,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           endSeconds: state.videoData.durationSeconds,
         },
         trimResult: null,
+        trimDownloadUrl: null,
+        trimError: null,
       };
 
     case "UPDATE_TRIM_SELECTION":
@@ -114,6 +128,17 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           mode: action.mode,
         },
       };
+
+    case "DOWNLOAD_ERROR":
+      return { screen: "home", errorMessage: action.message };
+
+    case "TRIM_COMPLETE":
+      if (state.screen !== "trim") return state;
+      return { ...state, trimDownloadUrl: action.downloadUrl, trimError: null };
+
+    case "TRIM_ERROR":
+      if (state.screen !== "trim") return state;
+      return { ...state, trimDownloadUrl: null, trimError: action.message };
 
     case "BACK_TO_PREVIEW":
       if (state.screen !== "trim") return state;
