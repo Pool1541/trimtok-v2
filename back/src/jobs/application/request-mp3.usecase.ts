@@ -1,3 +1,4 @@
+import { createJob } from "../domain/job.entity.js";
 import { JobStatus } from "../domain/job-status.js";
 import { jobNotFound, jobNotReady } from "../../shared/errors.js";
 import type { IJobRepository } from "./ports/job.repository.js";
@@ -10,6 +11,8 @@ const MP3_READY_STATUSES: ReadonlySet<string> = new Set([JobStatus.ready, JobSta
 export interface RequestMp3Result {
   hit: boolean;
   downloadUrl?: string;
+  /** jobId del job hijo creado para este proceso de MP3 (presente sólo en cache miss) */
+  childJobId?: string;
 }
 
 export class RequestMp3UseCase {
@@ -33,7 +36,7 @@ export class RequestMp3UseCase {
     const hasRange = trimStart !== undefined && trimEnd !== undefined;
     const artifactType = hasRange ? "trim" : "original";
 
-    // Check cache
+    // Check cache — no se muta el job original
     const artifact = await this.artifactRepo.findByKey(
       videoId, "mp3", artifactType, trimStart, trimEnd,
     );
@@ -41,14 +44,22 @@ export class RequestMp3UseCase {
       const exists = await this.storage.objectExists(artifact.s3Key);
       if (exists) {
         const downloadUrl = await this.storage.generatePresignedUrl(artifact.s3Key, 3600);
-        await this.jobRepo.updateStatus(jobId, JobStatus.mp3_ready, { s3Key: artifact.s3Key });
         return { hit: true, downloadUrl };
       }
     }
 
-    // Cache miss — enqueue
-    await this.jobRepo.updateStatus(jobId, JobStatus.creating_mp3);
-    await this.queuePort.enqueueMp3({ jobId, videoId, trimStart, trimEnd });
-    return { hit: false };
+    // Cache miss — crear job hijo independiente y encolar
+    const childJob = createJob({ tiktokUrl: job.tiktokUrl, format: "mp3", videoId: job.videoId });
+    childJob.parentJobId = jobId;
+    childJob.status = JobStatus.creating_mp3;
+    await this.jobRepo.save(childJob);
+    await this.queuePort.enqueueMp3({
+      jobId: childJob.jobId,
+      videoId,
+      s3Key: job.s3Key!,
+      trimStart,
+      trimEnd,
+    });
+    return { hit: false, childJobId: childJob.jobId };
   }
 }

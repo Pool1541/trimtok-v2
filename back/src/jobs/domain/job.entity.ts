@@ -17,6 +17,8 @@ export interface Job {
   trimStart?: number;
   trimEnd?: number;
   errorMessage?: string;
+  /** jobId del job padre (video original) cuando este job es un proceso derivado (trim/gif/mp3) */
+  parentJobId?: string;
   retryCount: number;
   createdAt: string;
   updatedAt: string;

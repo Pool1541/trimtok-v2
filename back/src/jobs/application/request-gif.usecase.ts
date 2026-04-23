@@ -1,3 +1,4 @@
+import { createJob } from "../domain/job.entity.js";
 import { JobStatus } from "../domain/job-status.js";
 import { jobNotFound, jobNotReady } from "../../shared/errors.js";
 import type { IJobRepository } from "./ports/job.repository.js";
@@ -11,6 +12,8 @@ const DEFAULT_GIF_DURATION = 10;
 export interface RequestGifResult {
   hit: boolean;
   downloadUrl?: string;
+  /** jobId del job hijo creado para este proceso de GIF (presente sólo en cache miss) */
+  childJobId?: string;
 }
 
 export class RequestGifUseCase {
@@ -34,20 +37,28 @@ export class RequestGifUseCase {
     const start = trimStart ?? 0;
     const end = trimEnd ?? Math.min(DEFAULT_GIF_DURATION, job.duration ?? DEFAULT_GIF_DURATION);
 
-    // Check cache
+    // Check cache — no se muta el job original
     const artifact = await this.artifactRepo.findByKey(videoId, "gif", "gif", start, end);
     if (artifact) {
       const exists = await this.storage.objectExists(artifact.s3Key);
       if (exists) {
         const downloadUrl = await this.storage.generatePresignedUrl(artifact.s3Key, 3600);
-        await this.jobRepo.updateStatus(jobId, JobStatus.gif_created, { s3Key: artifact.s3Key });
         return { hit: true, downloadUrl };
       }
     }
 
-    // Cache miss — enqueue
-    await this.jobRepo.updateStatus(jobId, JobStatus.creating_gif);
-    await this.queuePort.enqueueGif({ jobId, videoId, trimStart: start, trimEnd: end });
-    return { hit: false };
+    // Cache miss — crear job hijo independiente y encolar
+    const childJob = createJob({ tiktokUrl: job.tiktokUrl, format: "mp4", videoId: job.videoId });
+    childJob.parentJobId = jobId;
+    childJob.status = JobStatus.creating_gif;
+    await this.jobRepo.save(childJob);
+    await this.queuePort.enqueueGif({
+      jobId: childJob.jobId,
+      videoId,
+      s3Key: job.s3Key!,
+      trimStart: start,
+      trimEnd: end,
+    });
+    return { hit: false, childJobId: childJob.jobId };
   }
 }
