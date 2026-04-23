@@ -18,6 +18,7 @@ export default $config({
   },
   async run() {
     const { default: path } = await import("path");
+    const logLevel = $app.stage === "production" ? "warn" : "debug";
 
     // ── DynamoDB single-table ─────────────────────────────────────────────────
     const table = new sst.aws.Dynamo("TrimtokTable", {
@@ -140,16 +141,19 @@ export default $config({
       handler: "src/handlers/websocket/connect.handler",
       link: [...baseLinks],
       logging: { retention: "1 week" },
+      environment: { LOG_LEVEL: logLevel },
     });
     wsApi.route("$disconnect", {
       handler: "src/handlers/websocket/disconnect.handler",
       link: [...baseLinks],
       logging: { retention: "1 week" },
+      environment: { LOG_LEVEL: logLevel },
     });
     wsApi.route("subscribe", {
       handler: "src/handlers/websocket/subscribe.handler",
       link: [...baseLinks, wsApi],
       logging: { retention: "1 week" },
+      environment: { LOG_LEVEL: logLevel },
     });
 
     // ── HTTP API ──────────────────────────────────────────────────────────────
@@ -164,30 +168,36 @@ export default $config({
       handler: "src/handlers/api/create-job.handler",
       link: apiHandlerLinks,
       logging: { retention: "1 week" },
+      environment: { LOG_LEVEL: logLevel },
     });
     api.route("GET /v1/jobs/{jobId}", {
       handler: "src/handlers/api/get-job.handler",
       link: apiHandlerLinks,
       logging: { retention: "1 week" },
+      environment: { LOG_LEVEL: logLevel },
     });
     api.route("POST /v1/jobs/{jobId}/trim", {
       handler: "src/handlers/api/request-trim.handler",
       link: apiHandlerLinks,
       logging: { retention: "1 week" },
+      environment: { LOG_LEVEL: logLevel },
     });
     api.route("POST /v1/jobs/{jobId}/gif", {
       handler: "src/handlers/api/request-gif.handler",
       link: apiHandlerLinks,
       logging: { retention: "1 week" },
+      environment: { LOG_LEVEL: logLevel },
     });
     api.route("POST /v1/jobs/{jobId}/mp3", {
       handler: "src/handlers/api/request-mp3.handler",
       link: apiHandlerLinks,
       logging: { retention: "1 week" },
+      environment: { LOG_LEVEL: logLevel },
     });
     api.route("GET /health", {
       handler: "src/index.handler",
       logging: { retention: "1 week" },
+      environment: { LOG_LEVEL: logLevel },
     });
 
     // ── SQS Worker subscribers ────────────────────────────────────────────────
@@ -204,6 +214,7 @@ export default $config({
       dev: false,
       environment: {
         FFMPEG_PATH: "/opt/bin/ffmpeg",
+        LOG_LEVEL: logLevel,
       },
     });
 
@@ -216,6 +227,7 @@ export default $config({
       architecture: "arm64",
       logging: { retention: "1 week" },
       dev: false,
+      environment: { LOG_LEVEL: logLevel },
     });
 
     gifQueue.subscribe({
@@ -227,6 +239,7 @@ export default $config({
       architecture: "arm64",
       logging: { retention: "1 week" },
       dev: false,
+      environment: { LOG_LEVEL: logLevel },
     });
 
     mp3Queue.subscribe({
@@ -238,6 +251,7 @@ export default $config({
       architecture: "arm64",
       logging: { retention: "1 week" },
       dev: false,
+      environment: { LOG_LEVEL: logLevel },
     });
 
     // ── CloudWatch Alarms for DLQs ────────────────────────────────────────────
