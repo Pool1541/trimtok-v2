@@ -1,65 +1,108 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import { axe } from "vitest-axe";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DownloadingScreen } from "@/components/downloading-screen";
-import { MOCK_VIDEO_DATA } from "@/lib/mock-data";
 
-beforeEach(() => {
-  vi.useFakeTimers();
-});
+// Mockear módulos de infraestructura para tests de integración
+vi.mock("@/lib/api-client", () => ({
+  createJob: vi.fn(),
+  getJob: vi.fn(),
+  ApiError: class ApiError extends Error {
+    constructor(public httpStatus: number, public code: string, message: string) {
+      super(message);
+    }
+  },
+}));
+vi.mock("@/lib/ws-client", () => ({
+  useJobWebSocket: vi.fn(),
+}));
 
-afterEach(() => {
-  vi.useRealTimers();
-});
+import { createJob, getJob } from "@/lib/api-client";
+import { useJobWebSocket } from "@/lib/ws-client";
+
+const TEST_URL = "https://www.tiktok.com/@user/video/1";
 
 function renderDownloadingScreen() {
   const dispatch = vi.fn();
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: 0 }, mutations: { retry: 0 } } });
   const result = render(
-    <DownloadingScreen url="https://www.tiktok.com/@user/video/1" dispatch={dispatch} />,
+    <QueryClientProvider client={qc}>
+      <DownloadingScreen url={TEST_URL} dispatch={dispatch} />
+    </QueryClientProvider>,
   );
   return { dispatch, ...result };
 }
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(useJobWebSocket).mockReturnValue({
+    isConnected: false,
+    isConnecting: false,
+    connectionError: null,
+  });
+});
+
 describe("DownloadingScreen — User Story 2", () => {
   it("(AC1) muestra barra de progreso con role=progressbar", () => {
+    vi.mocked(createJob).mockResolvedValue({ jobId: "j1", status: "pending" });
     renderDownloadingScreen();
     const progressbar = screen.getByRole("progressbar");
     expect(progressbar).toBeInTheDocument();
   });
 
   it("(AC2) muestra texto 'Descargando...'", () => {
+    vi.mocked(createJob).mockResolvedValue({ jobId: "j1", status: "pending" });
     renderDownloadingScreen();
     expect(screen.getByText("Descargando...")).toBeInTheDocument();
   });
 
-  it("(AC3) dispatch DOWNLOAD_COMPLETE con MOCK_VIDEO_DATA tras 2500ms", async () => {
+  it("(AC3) dispatch DOWNLOAD_COMPLETE cuando createJob retorna cache hit", async () => {
+    vi.mocked(createJob).mockResolvedValue({
+      jobId: "j-cached",
+      status: "ready",
+      downloadUrl: "https://example.com/video.mp4",
+    });
+    vi.mocked(getJob).mockResolvedValue({
+      jobId: "j-cached",
+      status: "ready",
+      format: "mp4",
+      title: "Test Video",
+      duration: 25,
+      thumbnailUrl: null,
+      trimStart: null,
+      trimEnd: null,
+      downloadUrl: "https://example.com/video.mp4",
+      errorMessage: null,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:01Z",
+    });
     const { dispatch } = renderDownloadingScreen();
-    expect(dispatch).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(2500);
+    await waitFor(() => {
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "DOWNLOAD_COMPLETE" }),
+      );
     });
-
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "DOWNLOAD_COMPLETE",
-      videoData: MOCK_VIDEO_DATA,
-    });
+    const call = dispatch.mock.calls[0][0];
+    expect(call.videoData.jobId).toBe("j-cached");
+    expect(call.videoData.videoUrl).toBe("https://example.com/video.mp4");
   });
 
-  it("(AC4) dispatch NO se llama antes de los 2500ms", async () => {
+  it("(AC4) dispatch DOWNLOAD_ERROR cuando createJob falla", async () => {
+    vi.mocked(createJob).mockRejectedValue(new Error("Network error"));
     const { dispatch } = renderDownloadingScreen();
-
-    await act(async () => {
-      vi.advanceTimersByTime(2499);
+    await waitFor(() => {
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "DOWNLOAD_ERROR" }),
+      );
     });
-
-    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it("accesibilidad — sin violaciones axe", async () => {
-    vi.useRealTimers();
+    vi.mocked(createJob).mockResolvedValue({ jobId: "j1", status: "pending" });
     const { container } = renderDownloadingScreen();
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
 });
+

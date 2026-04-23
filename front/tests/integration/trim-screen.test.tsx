@@ -2,10 +2,29 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TrimScreen } from "@/components/trim-screen";
 import type { VideoData, TrimSelection, TrimResult } from "@/lib/app-state";
 
+// Mockear api-client y ws-client para evitar llamadas reales
+vi.mock("@/lib/api-client", () => ({
+  requestTrim: vi.fn(),
+  requestMp3: vi.fn(),
+  requestGif: vi.fn(),
+  getJob: vi.fn(),
+  triggerDownload: vi.fn(),
+  ApiError: class ApiError extends Error {
+    constructor(public httpStatus: number, public code: string, message: string) {
+      super(message);
+    }
+  },
+}));
+vi.mock("@/lib/ws-client", () => ({
+  useJobWebSocket: vi.fn(),
+}));
+
 const MOCK_VIDEO: VideoData = {
+  jobId: "test-job-456",
   videoUrl: "/mock/sample-video.mp4",
   title: "Video de prueba",
   durationSeconds: 25,
@@ -21,13 +40,16 @@ function renderTrimScreen(
   overrides: { trimSelection?: TrimSelection; trimResult?: TrimResult | null; videoData?: VideoData } = {},
 ) {
   const dispatch = vi.fn();
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: 0 }, mutations: { retry: 0 } } });
   const result = render(
-    <TrimScreen
-      videoData={overrides.videoData ?? MOCK_VIDEO}
-      trimSelection={overrides.trimSelection ?? DEFAULT_SELECTION}
-      trimResult={overrides.trimResult ?? null}
-      dispatch={dispatch}
-    />,
+    <QueryClientProvider client={qc}>
+      <TrimScreen
+        videoData={overrides.videoData ?? MOCK_VIDEO}
+        trimSelection={overrides.trimSelection ?? DEFAULT_SELECTION}
+        trimResult={overrides.trimResult ?? null}
+        dispatch={dispatch}
+      />
+    </QueryClientProvider>,
   );
   return { dispatch, ...result };
 }

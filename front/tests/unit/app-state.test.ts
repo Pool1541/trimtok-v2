@@ -68,6 +68,8 @@ describe("appReducer", () => {
         endSeconds: mockVideoData.durationSeconds,
       },
       trimResult: null,
+      trimDownloadUrl: null,
+      trimError: null,
     });
   });
 

@@ -2,10 +2,27 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PreviewScreen } from "@/components/preview-screen";
 import type { VideoData } from "@/lib/app-state";
 
+// Mockear api-client para que useMutation no intente llamadas reales
+vi.mock("@/lib/api-client", () => ({
+  createJob: vi.fn(),
+  getJob: vi.fn(),
+  triggerDownload: vi.fn(),
+  ApiError: class ApiError extends Error {
+    constructor(public httpStatus: number, public code: string, message: string) {
+      super(message);
+    }
+  },
+}));
+vi.mock("@/lib/ws-client", () => ({
+  useJobWebSocket: vi.fn(),
+}));
+
 const MOCK_VIDEO: VideoData = {
+  jobId: "test-job-123",
   videoUrl: "/mock/sample-video.mp4",
   title: "Video de prueba de TikTok",
   durationSeconds: 25,
@@ -15,7 +32,12 @@ const MOCK_VIDEO: VideoData = {
 function renderPreviewScreen(overrides: Partial<VideoData> = {}) {
   const dispatch = vi.fn();
   const videoData = { ...MOCK_VIDEO, ...overrides };
-  const result = render(<PreviewScreen videoData={videoData} dispatch={dispatch} />);
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: 0 }, mutations: { retry: 0 } } });
+  const result = render(
+    <QueryClientProvider client={qc}>
+      <PreviewScreen videoData={videoData} dispatch={dispatch} />
+    </QueryClientProvider>,
+  );
   return { dispatch, ...result };
 }
 
