@@ -9,6 +9,7 @@ function makeJob(overrides: Record<string, unknown> = {}) {
     jobId: "01ABC", videoId: "vid123",
     tiktokUrl: "https://tiktok.com/@u/video/vid123",
     status: JobStatus.ready, format: "mp4", duration: 30,
+    s3Key: "originals/vid123/vid123.mp4",
     retryCount: 0, createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(), expiresAt: 9999999999,
     ...overrides,
@@ -65,8 +66,18 @@ describe("RequestGifUseCase", () => {
 
     const result = await useCase.execute("01ABC", 0, 10);
     expect(result.hit).toBe(false);
-    expect(mocks.queuePort.enqueueGif).toHaveBeenCalledOnce();
-    expect(mocks.jobRepo.updateStatus).toHaveBeenCalledWith("01ABC", JobStatus.creating_gif);
+    expect(result.childJobId).toBeDefined();
+    // Crea el job hijo (no muta el job original)
+    expect(mocks.jobRepo.save).toHaveBeenCalledOnce();
+    const savedChild = mocks.jobRepo.save.mock.calls[0][0];
+    expect(savedChild.parentJobId).toBe("01ABC");
+    expect(savedChild.status).toBe(JobStatus.creating_gif);
+    // Encola con el s3Key del job original
+    expect(mocks.queuePort.enqueueGif).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: result.childJobId, s3Key: "originals/vid123/vid123.mp4" }),
+    );
+    // No debe mutar el job original
+    expect(mocks.jobRepo.updateStatus).not.toHaveBeenCalled();
   });
 
   it("returns cache hit with presigned URL", async () => {
@@ -79,5 +90,7 @@ describe("RequestGifUseCase", () => {
     expect(result.hit).toBe(true);
     expect(result.downloadUrl).toBe("https://gif.signed.url");
     expect(mocks.queuePort.enqueueGif).not.toHaveBeenCalled();
+    // No debe mutar el job original en cache hit
+    expect(mocks.jobRepo.updateStatus).not.toHaveBeenCalled();
   });
 });

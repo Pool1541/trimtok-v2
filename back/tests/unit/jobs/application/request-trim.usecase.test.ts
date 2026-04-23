@@ -14,6 +14,7 @@ function makeJob(overrides: Record<string, unknown> = {}) {
     status: JobStatus.ready,
     format: "mp4",
     duration: 60,
+    s3Key: "originals/vid123/vid123.mp4",
     retryCount: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -91,8 +92,18 @@ describe("RequestTrimUseCase", () => {
 
     const result = await useCase.execute("01ABC", 0, 30);
     expect(result.hit).toBe(false);
-    expect(mocks.queuePort.enqueueTrim).toHaveBeenCalledOnce();
-    expect(mocks.jobRepo.updateStatus).toHaveBeenCalledWith("01ABC", JobStatus.trimming);
+    expect(result.childJobId).toBeDefined();
+    // Crea el job hijo (no muta el job original)
+    expect(mocks.jobRepo.save).toHaveBeenCalledOnce();
+    const savedChild = mocks.jobRepo.save.mock.calls[0][0];
+    expect(savedChild.parentJobId).toBe("01ABC");
+    expect(savedChild.status).toBe(JobStatus.trimming);
+    // Encola con el s3Key del job original
+    expect(mocks.queuePort.enqueueTrim).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: result.childJobId, s3Key: "originals/vid123/vid123.mp4" }),
+    );
+    // No debe mutar el job original
+    expect(mocks.jobRepo.updateStatus).not.toHaveBeenCalled();
   });
 
   it("returns cache hit with presigned URL when artifact exists in S3", async () => {
@@ -105,5 +116,7 @@ describe("RequestTrimUseCase", () => {
     expect(result.hit).toBe(true);
     expect(result.downloadUrl).toBe("https://signed.url");
     expect(mocks.queuePort.enqueueTrim).not.toHaveBeenCalled();
+    // No debe mutar el job original en cache hit
+    expect(mocks.jobRepo.updateStatus).not.toHaveBeenCalled();
   });
 });
