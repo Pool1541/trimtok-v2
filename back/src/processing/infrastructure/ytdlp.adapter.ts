@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { MAX_VIDEO_DURATION_SECONDS } from "../domain/video-processor.entity.js";
-import { videoTooLong, internalError } from "../../shared/errors.js";
+import { videoTooLong, internalError, videoNotAvailable } from "../../shared/errors.js";
 import type { IDownloaderPort, DownloadOutput } from "../application/ports/downloader.port.js";
 
 export class YtDlpAdapter implements IDownloaderPort {
@@ -26,16 +26,27 @@ export class YtDlpAdapter implements IDownloaderPort {
       url,
     ];
 
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(ytdlp, args, { stdio: "pipe" });
-      let stderr = "";
-      child.stderr?.on("data", (d: Buffer) => { stderr += d.toString(); });
-      child.on("close", (code) => {
-        if (code !== 0) reject(internalError(`yt-dlp exited with code ${code}: ${stderr}`));
-        else resolve();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(ytdlp, args, { stdio: "pipe" });
+        let stderr = "";
+        child.stderr?.on("data", (d: Buffer) => { stderr += d.toString(); });
+        child.on("close", (code) => {
+          if (code !== 0) reject(internalError(`yt-dlp exited with code ${code}: ${stderr}`));
+          else resolve();
+        });
+        child.on("error", reject);
       });
-      child.on("error", reject);
-    });
+    } catch (err) {
+      if (!(err instanceof Error)) {
+        throw internalError("Unknown error type from yt-dlp process");
+      }
+
+      if (typeof err.cause === "string" && err.cause.includes("is blocked from accessing this post")) {
+        throw videoNotAvailable();
+      }
+    }
+    
 
     // Find the info JSON file
     const { readdirSync } = await import("node:fs");

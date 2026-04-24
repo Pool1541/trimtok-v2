@@ -6,6 +6,7 @@ export enum ErrorCode {
   JOB_NOT_READY = "JOB_NOT_READY",
   RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED",
   INTERNAL_ERROR = "INTERNAL_ERROR",
+  VIDEO_NOT_AVAILABLE = "VIDEO_NOT_AVAILABLE",
 }
 
 export class AppError extends Error {
@@ -57,6 +58,14 @@ export function rateLimitExceeded(): AppError {
     ErrorCode.RATE_LIMIT_EXCEEDED,
     "Rate limit exceeded. Maximum 10 requests per minute per IP.",
     429,
+  );
+}
+
+export function videoNotAvailable(): AppError {
+  return new AppError(
+    ErrorCode.VIDEO_NOT_AVAILABLE,
+    "Video is not available for download or does not exist.",
+    404,
   );
 }
 
