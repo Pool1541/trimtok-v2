@@ -19,6 +19,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TrimTok",
   description: "Descarga y recorta videos de TikTok",
+  icons: "/icon.svg"
 };
 
 export default function RootLayout({
