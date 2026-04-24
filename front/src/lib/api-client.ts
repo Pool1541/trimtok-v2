@@ -15,6 +15,8 @@ export const mapErrorMessage = (errorMessage: unknown) => {
   switch (errorMessage) {
     case "Video exceeds the maximum allowed duration of 5 minutes.":
       return "El video supera los 5 minutos de duración máxima permitida.";
+    case "Video is not available for download or does not exist.":
+      return "El video no está disponible para descargar o no existe.";
     default:
       return errorMessage;
   }
