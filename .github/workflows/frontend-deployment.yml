@@ -3,10 +3,10 @@
 #
 # Configuración requerida en el repositorio:
 #   Settings → Pages → Source: "GitHub Actions"
-#   Settings → Variables → PAGES_DOMAIN: tu dominio personalizado (ej. app.ejemplo.com)
+#   Settings → Variables → PAGES_DOMAIN: trimtok.pool-llerena.com
 #
 # Configuración requerida en Cloudflare:
-#   DNS → CNAME: <dominio> → <usuario>.github.io  (proxy activado ☁️)
+#   DNS → CNAME: trimtok → pool1541.github.io  (proxy activado ☁️)
 #   SSL/TLS → Full (no Full Strict, ya que GitHub Pages usa cert propio)
 
 name: Deploy Frontend — GitHub Pages
@@ -48,11 +48,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # BASE_PATH vacío si hay dominio personalizado (Cloudflare); /<repo> si es GitHub Pages puro
+      - name: Compute base path
+        id: basepath
+        run: |
+          if [ -n "${{ vars.PAGES_DOMAIN }}" ]; then
+            echo "value=" >> $GITHUB_OUTPUT
+          else
+            echo "value=/${{ github.event.repository.name }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build
         run: npm run build --workspace=front
         env:
-          # Deshabilita telemetría de Next.js en CI
           NEXT_TELEMETRY_DISABLED: "1"
+          BASE_PATH: ${{ steps.basepath.outputs.value }}
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_WS_URL: ${{ vars.NEXT_PUBLIC_WS_URL }}
 
       # GitHub Pages ignora carpetas que empiezan con "_" (como _next/) si no hay .nojekyll
       - name: Disable Jekyll
