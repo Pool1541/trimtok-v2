@@ -1,0 +1,84 @@
+# Despliega el frontend (Next.js SSG) en GitHub Pages.
+# Cloudflare actúa como proxy inverso en frente: gestiona dominio, TLS, WAF y caché CDN.
+#
+# Configuración requerida en el repositorio:
+#   Settings → Pages → Source: "GitHub Actions"
+#   Settings → Variables → PAGES_DOMAIN: tu dominio personalizado (ej. app.ejemplo.com)
+#
+# Configuración requerida en Cloudflare:
+#   DNS → CNAME: <dominio> → <usuario>.github.io  (proxy activado ☁️)
+#   SSL/TLS → Full (no Full Strict, ya que GitHub Pages usa cert propio)
+
+name: Deploy Frontend — GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Permisos mínimos para el deployment de Pages con OIDC (sin tokens de larga vida)
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Evita deployments solapados; permite que el deploy en curso termine antes de cancelar
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # ─── 1. BUILD ──────────────────────────────────────────────────────────────
+  build:
+    name: Build (SSG)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          # El package-lock.json está en la raíz del monorepo
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build --workspace=front
+        env:
+          # Deshabilita telemetría de Next.js en CI
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      # GitHub Pages ignora carpetas que empiezan con "_" (como _next/) si no hay .nojekyll
+      - name: Disable Jekyll
+        run: touch front/out/.nojekyll
+
+      # El CNAME le indica a GitHub Pages cuál es el dominio personalizado.
+      # Sin este archivo, GitHub Pages resetea el dominio en cada deploy.
+      - name: Set custom domain (CNAME)
+        if: vars.PAGES_DOMAIN != ''
+        run: echo "${{ vars.PAGES_DOMAIN }}" > front/out/CNAME
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: front/out
+
+  # ─── 2. DEPLOY ─────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
