@@ -85,25 +85,25 @@ export default $config({
     const downloadDlq = new sst.aws.Queue("DownloadDLQ");
     const downloadQueue = new sst.aws.Queue("DownloadQueue", {
       dlq: { queue: downloadDlq.arn, retry: 2 },
-      visibilityTimeout: "900 seconds",
+      visibilityTimeout: "240 seconds",
     });
 
     const trimDlq = new sst.aws.Queue("TrimDLQ");
     const trimQueue = new sst.aws.Queue("TrimQueue", {
       dlq: { queue: trimDlq.arn, retry: 2 },
-      visibilityTimeout: "900 seconds",
+      visibilityTimeout: "240 seconds",
     });
 
     const gifDlq = new sst.aws.Queue("GifDLQ");
     const gifQueue = new sst.aws.Queue("GifQueue", {
       dlq: { queue: gifDlq.arn, retry: 2 },
-      visibilityTimeout: "300 seconds",
+      visibilityTimeout: "240 seconds",
     });
 
     const mp3Dlq = new sst.aws.Queue("Mp3DLQ");
     const mp3Queue = new sst.aws.Queue("Mp3Queue", {
       dlq: { queue: mp3Dlq.arn, retry: 2 },
-      visibilityTimeout: "300 seconds",
+      visibilityTimeout: "240 seconds",
     });
     // ── Lambda layers ──────────────────────────────────────────────────────
     // Binaries must be placed in layers/ytdlp/bin/yt-dlp and layers/ffmpeg/bin/ffmpeg
@@ -206,7 +206,7 @@ export default $config({
     downloadQueue.subscribe({
       handler: "src/handlers/workers/download-worker.handler",
       link: [...workerLinks, downloadQueue],
-      timeout: "900 seconds",
+      timeout: "240 seconds",
       memory: "1024 MB",
       layers: [ytdlpLayer.arn, ffmpegLayer.arn],
       architecture: "arm64",
@@ -216,43 +216,51 @@ export default $config({
         FFMPEG_PATH: "/opt/bin/ffmpeg",
         LOG_LEVEL: logLevel,
       },
-    });
+    },
+    { batch: { partialResponses: true } },
+    );
 
     trimQueue.subscribe({
       handler: "src/handlers/workers/trim-worker.handler",
       link: [...workerLinks, trimQueue],
-      timeout: "900 seconds",
+      timeout: "240 seconds",
       memory: "1024 MB",
       layers: [ffmpegLayer.arn],
       architecture: "arm64",
       logging: { retention: "1 week" },
       dev: false,
       environment: { LOG_LEVEL: logLevel },
-    });
+    },
+    { batch: { partialResponses: true } },
+    );
 
     gifQueue.subscribe({
       handler: "src/handlers/workers/gif-worker.handler",
       link: [...workerLinks, gifQueue],
-      timeout: "300 seconds",
+      timeout: "240 seconds",
       memory: "1024 MB",
       layers: [ffmpegLayer.arn],
       architecture: "arm64",
       logging: { retention: "1 week" },
       dev: false,
       environment: { LOG_LEVEL: logLevel },
-    });
+    },
+    { batch: { partialResponses: true } },
+    );
 
     mp3Queue.subscribe({
       handler: "src/handlers/workers/mp3-worker.handler",
       link: [...workerLinks, mp3Queue],
-      timeout: "300 seconds",
+      timeout: "240 seconds",
       memory: "1024 MB",
       layers: [ffmpegLayer.arn],
       architecture: "arm64",
       logging: { retention: "1 week" },
       dev: false,
       environment: { LOG_LEVEL: logLevel },
-    });
+    },
+    { batch: { partialResponses: true } },
+    );
 
     // ── CloudWatch Alarms for DLQs ────────────────────────────────────────────
     const dlqAlarms = [
