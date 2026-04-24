@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Music2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/footer";
+import { Header } from "@/components/header";
 import { getUrlError } from "@/lib/tiktok-url";
 import type { AppAction } from "@/lib/app-state";
 
@@ -38,18 +38,7 @@ export function HomeScreen({ dispatch, errorMessage }: HomeScreenProps) {
 
   return (
     <div className="flex min-h-screen flex-col bg-(--trimtok-bg)">
-      {/* Encabezado con logo y slogan */}
-      <header className="flex flex-col items-center pt-8 pb-2 gap-1">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
-            <img src="/trimtok-icon.png" alt="TrimTok Logo" className="w-7 h-7" />
-          </div>
-          <span className="text-xl font-bold text-white">TrimTok</span>
-        </div>
-        <p className="text-sm text-(--trimtok-text-muted)">
-          Descarga y recorta videos de TikTok
-        </p>
-      </header>
+      <Header />
 
       {/* Contenido principal centrado */}
       <main className="flex-1 flex flex-col items-center justify-center gap-6 px-4 py-8">
