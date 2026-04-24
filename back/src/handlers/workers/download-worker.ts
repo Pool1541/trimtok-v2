@@ -18,6 +18,7 @@ import { createLogger, withSqsRecordContext, setJobId } from "../../shared/logge
 const NON_RETRIABLE_CODES = new Set<ErrorCode>([
   ErrorCode.VIDEO_TOO_LONG,
   ErrorCode.INVALID_URL,
+  ErrorCode.VIDEO_NOT_AVAILABLE,
 ]);
 
 const EVENT_TTL = 7 * 24 * 3600;
