@@ -80,12 +80,12 @@ interface UseJobWebSocketResult {
  *
  * @param jobId    The job to subscribe to. Pass `null` to skip connection.
  * @param onMessage  Callback invoked for each WsJobMessage (including timeout).
- * @param timeoutMs  Max ms to wait for a terminal status. Default 120 000.
+ * @param timeoutMs  Max ms to wait for a terminal status. Default 300 000 = 5 minutes.
  */
 export function useJobWebSocket(
   jobId: string | null,
   onMessage: (msg: WsJobMessage) => void,
-  timeoutMs = 120_000,
+  timeoutMs = 300_000,
 ): UseJobWebSocketResult {
   const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? null;
   const onMessageRef = useRef(onMessage);
