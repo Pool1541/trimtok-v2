@@ -15,6 +15,12 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "front/src/**"
+      - "front/public/**"
+      - "front/tests/**"
+      - "front/*.{json,js,ts,mjs}"
+      - "package-lock.json"
   workflow_dispatch:
 
 # Permisos mínimos para el deployment de Pages con OIDC (sin tokens de larga vida)
