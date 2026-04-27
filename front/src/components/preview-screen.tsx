@@ -6,7 +6,7 @@ import { Download, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VideoPlayer } from "@/components/video-player";
 import { Footer } from "@/components/footer";
-import { createJob, getJob, triggerDownload, ApiError } from "@/lib/api-client";
+import { createJob, getJob, requestMp3, triggerDownload, ApiError } from "@/lib/api-client";
 import { useJobWebSocket } from "@/lib/ws-client";
 import type { AppAction, VideoData } from "@/lib/app-state";
 
@@ -29,6 +29,11 @@ export function PreviewScreen({ videoData, dispatch }: PreviewScreenProps) {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
+  function resetDownloadState() {
+    setActiveFormat(null);
+    setActiveJobId(null);
+  }
+
   async function resolveAndDownload(jobId: string, format: DownloadFormat) {
     try {
       const job = await getJob(jobId);
@@ -39,8 +44,7 @@ export function PreviewScreen({ videoData, dispatch }: PreviewScreenProps) {
     } catch {
       setDownloadError("Error al obtener el enlace de descarga");
     } finally {
-      setActiveFormat(null);
-      setActiveJobId(null);
+      resetDownloadState();
     }
   }
 
@@ -68,21 +72,41 @@ export function PreviewScreen({ videoData, dispatch }: PreviewScreenProps) {
     },
   });
 
+  async function handleMp3Ready(jobId: string) {
+    try {
+      const data = await requestMp3(jobId);
+      if (data.status === "mp3_ready" && data.downloadUrl) {
+        await triggerDownload(data.downloadUrl, `trimtok-${jobId}.mp3`);
+        resetDownloadState();
+      } else if (data.jobId) {
+        setActiveJobId(data.jobId);
+      }
+    } catch {
+      setDownloadError("Error al extraer el audio.");
+      resetDownloadState();
+    }
+  }
+
   useJobWebSocket(activeJobId, (msg) => {
     if (msg.type === "timeout") {
       setDownloadError("Tiempo de espera agotado. Intenta de nuevo.");
-      setActiveFormat(null);
-      setActiveJobId(null);
+      resetDownloadState();
       return;
     }
-    if (msg.type === "job_update") {
-      if (msg.status === "error") {
+    if (msg.type !== "job_update") return;
+
+    switch (msg.status) {
+      case "error":
         setDownloadError("Error en el servidor al procesar el video.");
-        setActiveFormat(null);
-        setActiveJobId(null);
-      } else if (msg.status === "ready") {
-        void resolveAndDownload(msg.jobId, activeFormat ?? "mp4");
-      }
+        resetDownloadState();
+        break;
+      case "ready":
+        if (activeFormat === "mp3") void handleMp3Ready(msg.jobId);
+        else void resolveAndDownload(msg.jobId, activeFormat ?? "mp4");
+        break;
+      case "mp3_ready":
+        void resolveAndDownload(msg.jobId, "mp3");
+        break;
     }
   });
 
