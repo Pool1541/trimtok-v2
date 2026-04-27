@@ -260,7 +260,7 @@ export function TrimScreen({
               value={[startSeconds, endSeconds]}
               min={0}
               max={durationSeconds}
-              step={0.1}
+              step={1}
               minStepsBetweenThumbs={0.1}
               onValueChange={handleSliderChange}
               aria-label="Rango de recorte"
