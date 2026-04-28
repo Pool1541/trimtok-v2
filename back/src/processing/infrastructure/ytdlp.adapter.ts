@@ -11,6 +11,11 @@ export class YtDlpAdapter implements IDownloaderPort {
 
     const ffmpeg = process.env.FFMPEG_PATH ?? "/opt/bin/ffmpeg";
 
+    // Use an isolated subdirectory per download to avoid picking up stale files
+    // from previous Lambda invocations that reuse /tmp across warm starts.
+    const { mkdtemp } = await import("node:fs/promises");
+    const workDir = await mkdtemp(join(destDir, "dl-"));
+
     const args = [
       "--no-playlist",
       "--no-warnings",
@@ -21,7 +26,7 @@ export class YtDlpAdapter implements IDownloaderPort {
       "--merge-output-format", "mp4",
       "--recode-video", "mp4",
       "--postprocessor-args", "ffmpeg:-c:v libopenh264 -c:a aac -movflags +faststart",
-      "-P", destDir,
+      "-P", workDir,
       "-o", "%(id)s.%(ext)s",
       url,
     ];
@@ -47,10 +52,9 @@ export class YtDlpAdapter implements IDownloaderPort {
       }
     }
     
-
-    // Find the info JSON file
+    // Find the info JSON file — scan only workDir to avoid stale files in /tmp
     const { readdirSync } = await import("node:fs");
-    const files = readdirSync(destDir);
+    const files = readdirSync(workDir);
     const infoFile = files.find((f) => f.endsWith(".info.json"));
     const videoFile = files.find((f) => !f.endsWith(".info.json") && !f.endsWith(".part"));
 
@@ -58,7 +62,7 @@ export class YtDlpAdapter implements IDownloaderPort {
       throw internalError("yt-dlp did not produce expected output files");
     }
 
-    const infoPath = join(destDir, infoFile);
+    const infoPath = join(workDir, infoFile);
     const infoRaw = await readFile(infoPath, "utf-8");
     const info = JSON.parse(infoRaw) as {
       id: string;
@@ -71,7 +75,7 @@ export class YtDlpAdapter implements IDownloaderPort {
       throw videoTooLong();
     }
 
-    const localPath = join(destDir, videoFile);
+    const localPath = join(workDir, videoFile);
     const { stat } = await import("node:fs/promises");
     const stats = await stat(localPath);
 
