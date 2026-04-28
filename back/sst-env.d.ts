@@ -14,6 +14,10 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Bucket"
     }
+    "CloudflareSecret": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
     "DownloadDLQ": {
       "type": "sst.aws.Queue"
       "url": string
