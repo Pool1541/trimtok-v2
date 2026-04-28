@@ -56,7 +56,7 @@ export class FfmpegAdapter implements ITranscoderPort {
     const args: string[] = ["-y"];
     if (start !== undefined) args.push("-ss", String(start));
     if (end !== undefined) args.push("-to", String(end));
-    args.push("-i", inputPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", outputPath);
+    args.push("-i", inputPath, "-vn", "-c:a", "libmp3lame", "-q:a", "2", "-f", "mp3", outputPath);
     await runFfmpeg(args);
   }
 }
