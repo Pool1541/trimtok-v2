@@ -61,7 +61,7 @@ export default function () {
     "status is 200 or 201": (r) => r.status === 200 || r.status === 201,
     "response has jobId or downloadUrl": (r) => {
       try {
-        const body = JSON.parse(r.body as string);
+        const body = JSON.parse(r.body);
         return body.jobId !== undefined || body.downloadUrl !== undefined;
       } catch {
         return false;
