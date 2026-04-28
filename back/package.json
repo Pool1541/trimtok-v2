@@ -2,12 +2,9 @@
   "name": "back",
   "type": "module",
   "scripts": {
-    "build": "esbuild --bundle --outfile=./dist/index.js --platform=node --target=node20 ./src/index.ts",
     "dev": "npx sst dev",
     "destroy": "npx sst remove",
-    "deploy": "run-s build zip update",
-    "update": "aws lambda update-function-code --zip-file fileb://lambda.zip --function-name hello",
-    "zip": "zip -j lambda.zip dist/index.js",
+    "deploy:production": "npx sst deploy --stage production",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
