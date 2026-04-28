@@ -33,12 +33,13 @@ app.post(
     }
   }),
   async (c) => {
-    // Rate-limit check: 10 req/min per IP
     const requestContext = (c.env as Record<string, unknown>)?.["requestContext"] as
-      | { identity?: { sourceIp?: string } }
+      | { http?: { sourceIp?: string }; identity?: { sourceIp?: string } }
       | undefined;
     const clientIp =
+      c.req.header("cf-connecting-ip") ??
       c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+      requestContext?.http?.sourceIp ??
       requestContext?.identity?.sourceIp ??
       "unknown";
 
