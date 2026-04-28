@@ -18,6 +18,9 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
+    env:
+      YTDLP_VERSION: "2026.03.17"
+      FFMPEG_VERSION: "n7.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,6 +34,34 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Cache yt-dlp binary
+        id: cache-ytdlp
+        uses: actions/cache@v4
+        with:
+          path: back/layers/ytdlp/bin/yt-dlp
+          key: ytdlp-${{ env.YTDLP_VERSION }}-linux-arm64
+
+      - name: Download yt-dlp (arm64)
+        if: steps.cache-ytdlp.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp_linux_aarch64" \
+            -o back/layers/ytdlp/bin/yt-dlp
+          chmod +x back/layers/ytdlp/bin/yt-dlp
+
+      - name: Cache ffmpeg binary
+        id: cache-ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: back/layers/ffmpeg/bin/ffmpeg
+          key: ffmpeg-${{ env.FFMPEG_VERSION }}-linux-arm64
+
+      - name: Download ffmpeg (arm64)
+        if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-${FFMPEG_VERSION}-latest-linuxarm64-gpl-${FFMPEG_VERSION}.tar.xz" \
+            | tar -xJ --strip-components=2 --wildcards -C back/layers/ffmpeg/bin '*/bin/ffmpeg'
+          chmod +x back/layers/ffmpeg/bin/ffmpeg
 
       - name: Deploy with SST
         run: npm run deploy:back
