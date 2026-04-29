@@ -51,7 +51,7 @@ export function DownloadingScreen({ url, dispatch }: DownloadingScreenProps) {
     try {
       const job = await getJob(jobId);
       if (job.status === "error") {
-        finishWithError();
+        finishWithError(mapErrorMessage(job.errorMessage));
         return;
       }
       const videoData: VideoData = {
@@ -102,7 +102,11 @@ export function DownloadingScreen({ url, dispatch }: DownloadingScreenProps) {
     }
     if (msg.type === "job_update") {
       if (msg.status === "error") {
-        finishWithError(mapErrorMessage(msg.errorMessage));
+        if (typeof msg.errorMessage === "string" && msg.errorMessage.length > 0) {
+          finishWithError(mapErrorMessage(msg.errorMessage));
+        } else {
+          void resolveJob(msg.jobId);
+        }
       } else if (msg.status === "ready") {
         void resolveJob(msg.jobId);
       }
