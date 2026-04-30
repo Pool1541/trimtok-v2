@@ -80,9 +80,10 @@ describe("RequestMp3UseCase", () => {
     expect(mocks.jobRepo.updateStatus).not.toHaveBeenCalled();
   });
 
-  it("enqueues mp3 on cache miss and creates child job", async () => {
+  it("enqueues mp3 on cache miss when MP4 exists in S3", async () => {
     mocks.jobRepo.findById.mockResolvedValue(makeJob());
     mocks.artifactRepo.findByKey.mockResolvedValue(null);
+    mocks.storage.objectExists.mockResolvedValue(true);
 
     const result = await useCase.execute("01ABC", 10, 30);
     expect(result.hit).toBe(false);
@@ -92,11 +93,45 @@ describe("RequestMp3UseCase", () => {
     const savedChild = mocks.jobRepo.save.mock.calls[0][0];
     expect(savedChild.parentJobId).toBe("01ABC");
     expect(savedChild.status).toBe(JobStatus.creating_mp3);
-    // Encola con el s3Key del job original
+    // Encola directamente la transcodificación con el s3Key del job original
     expect(mocks.queuePort.enqueueMp3).toHaveBeenCalledWith(
       expect.objectContaining({ jobId: result.childJobId, s3Key: "originals/vid123/vid123.mp4" }),
     );
+    expect(mocks.queuePort.enqueueDownload).not.toHaveBeenCalled();
     // No debe mutar el job original
     expect(mocks.jobRepo.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it("falls back to enqueueDownload when MP4 is missing from S3", async () => {
+    mocks.jobRepo.findById.mockResolvedValue(makeJob());
+    mocks.artifactRepo.findByKey.mockResolvedValue(null);
+    mocks.storage.objectExists.mockResolvedValue(false);
+
+    const result = await useCase.execute("01ABC");
+    expect(result.hit).toBe(false);
+    expect(result.childJobId).toBeDefined();
+    const savedChild = mocks.jobRepo.save.mock.calls[0][0];
+    expect(savedChild.status).toBe(JobStatus.pending);
+    expect(mocks.queuePort.enqueueDownload).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: result.childJobId, format: "mp3" }),
+    );
+    expect(mocks.queuePort.enqueueMp3).not.toHaveBeenCalled();
+  });
+
+  it("falls back to enqueueDownload when job has no s3Key", async () => {
+    mocks.jobRepo.findById.mockResolvedValue(makeJob({ s3Key: undefined }));
+    mocks.artifactRepo.findByKey.mockResolvedValue(null);
+
+    const result = await useCase.execute("01ABC");
+    expect(result.hit).toBe(false);
+    expect(result.childJobId).toBeDefined();
+    const savedChild = mocks.jobRepo.save.mock.calls[0][0];
+    expect(savedChild.status).toBe(JobStatus.pending);
+    expect(mocks.queuePort.enqueueDownload).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: result.childJobId, format: "mp3" }),
+    );
+    expect(mocks.queuePort.enqueueMp3).not.toHaveBeenCalled();
+    // objectExists no debe ser invocado si s3Key es undefined
+    expect(mocks.storage.objectExists).not.toHaveBeenCalledWith(undefined);
   });
 });
