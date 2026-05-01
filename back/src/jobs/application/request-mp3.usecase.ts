@@ -51,12 +51,39 @@ export class RequestMp3UseCase {
     // Cache miss — crear job hijo independiente y encolar
     const childJob = createJob({ tiktokUrl: job.tiktokUrl, format: "mp3", videoId: job.videoId });
     childJob.parentJobId = jobId;
+
+    if (!job.s3Key) {
+      // El artefacto MP4 original no está disponible: encolar descarga completa en formato mp3
+      childJob.status = JobStatus.pending;
+      await this.jobRepo.save(childJob);
+      await this.queuePort.enqueueDownload({
+        jobId: childJob.jobId,
+        tiktokUrl: job.tiktokUrl,
+        format: "mp3",
+      });
+      return { hit: false, childJobId: childJob.jobId };
+    }
+
+    const mp4Exists = await this.storage.objectExists(job.s3Key);
+    if (!mp4Exists) {
+      // El objeto MP4 ya no está en S3 (expirado): encolar descarga completa en formato mp3
+      childJob.status = JobStatus.pending;
+      await this.jobRepo.save(childJob);
+      await this.queuePort.enqueueDownload({
+        jobId: childJob.jobId,
+        tiktokUrl: job.tiktokUrl,
+        format: "mp3",
+      });
+      return { hit: false, childJobId: childJob.jobId };
+    }
+
+    // MP4 disponible en S3: encolar directamente la transcodificación a mp3
     childJob.status = JobStatus.creating_mp3;
     await this.jobRepo.save(childJob);
     await this.queuePort.enqueueMp3({
       jobId: childJob.jobId,
       videoId,
-      s3Key: job.s3Key!,
+      s3Key: job.s3Key,
       trimStart,
       trimEnd,
     });
