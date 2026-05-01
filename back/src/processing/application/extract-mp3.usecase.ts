@@ -7,6 +7,7 @@ import type { IStoragePort } from "../../jobs/application/ports/storage.port.js"
 import type { ITranscoderPort } from "./ports/transcoder.port.js";
 import type { INotifyJobUpdateUseCase } from "../../notifications/application/notify-job-update.usecase.js";
 import { join } from "node:path";
+import { rm } from "node:fs/promises";
 
 export class ExtractMp3UseCase {
   constructor(
@@ -29,44 +30,52 @@ export class ExtractMp3UseCase {
     const hasRange = trimStart !== undefined && trimEnd !== undefined;
     const localOut = join("/tmp", `${jobId}.mp3`);
 
-    // Download original from S3
-    await this.storage.download(s3Key, localIn);
+    try {
+      // Download original from S3
+      await this.storage.download(s3Key, localIn);
 
-    // Extract MP3 via ffmpeg
-    await this.transcoder.extractMp3(localIn, localOut, trimStart, trimEnd);
+      // Extract MP3 via ffmpeg
+      await this.transcoder.extractMp3(localIn, localOut, trimStart, trimEnd);
 
-    // Determine S3 key based on range
-    const outKey = hasRange
-      ? `mp3s/trims/${videoId}/${jobId}.mp3`
-      : `mp3s/originals/${videoId}/${videoId}.mp3`;
+      // Determine S3 key based on range
+      const outKey = hasRange
+        ? `mp3s/trims/${videoId}/${jobId}.mp3`
+        : `mp3s/originals/${videoId}/${videoId}.mp3`;
 
-    const artifactType = hasRange ? "trim" : "original";
-    const fileSizeBytes = await this.storage.upload(outKey, localOut, "audio/mpeg");
+      const artifactType = hasRange ? "trim" : "original";
+      const fileSizeBytes = await this.storage.upload(outKey, localOut, "audio/mpeg");
 
-    // Write CacheArtifact
-    const now = new Date().toISOString();
-    const ttlSec = artifactTtlSeconds("mp3", artifactType);
-    await this.artifactRepo.save({
-      pk: artifactPk(videoId),
-      sk: artifactSk("mp3", artifactType, trimStart, trimEnd),
-      type: "ARTIFACT",
-      videoId,
-      tiktokUrl: "",
-      format: "mp3",
-      artifactType,
-      s3Key: outKey,
-      fileSizeBytes,
-      trimStart,
-      trimEnd,
-      downloadCount: 0,
-      createdAt: now,
-      expiresAt: Math.floor(Date.now() / 1000) + ttlSec,
-    });
+      // Write CacheArtifact
+      const now = new Date().toISOString();
+      const ttlSec = artifactTtlSeconds("mp3", artifactType);
+      await this.artifactRepo.save({
+        pk: artifactPk(videoId),
+        sk: artifactSk("mp3", artifactType, trimStart, trimEnd),
+        type: "ARTIFACT",
+        videoId,
+        tiktokUrl: "",
+        format: "mp3",
+        artifactType,
+        s3Key: outKey,
+        fileSizeBytes,
+        trimStart,
+        trimEnd,
+        downloadCount: 0,
+        createdAt: now,
+        expiresAt: Math.floor(Date.now() / 1000) + ttlSec,
+      });
 
-    // Update job to mp3_ready
-    await this.jobRepo.updateStatus(jobId, JobStatus.mp3_ready, { s3Key: outKey });
+      // Update job to mp3_ready
+      await this.jobRepo.updateStatus(jobId, JobStatus.mp3_ready, { s3Key: outKey });
 
-    // Notify WS subscribers
-    await this.notifier.execute(jobId);
+      // Notify WS subscribers
+      await this.notifier.execute(jobId);
+    } finally {
+      // Always clean up temp files to free ephemeral storage
+      await Promise.allSettled([
+        rm(localIn, { force: true }),
+        rm(localOut, { force: true }),
+      ]);
+    }
   }
 }

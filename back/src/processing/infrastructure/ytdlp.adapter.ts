@@ -97,6 +97,7 @@ export class YtDlpAdapter implements IDownloaderPort {
     const metadata = await this.fetchMetadata(ytdlp, url).catch((err) => {
       throw this.toDomainError(err);
     });
+    
     if (metadata.duration > MAX_VIDEO_DURATION_SECONDS) {
       throw videoTooLong();
     }
@@ -139,10 +140,6 @@ export class YtDlpAdapter implements IDownloaderPort {
     const infoRaw = await readFile(infoPath, "utf-8");
     const info = JSON.parse(infoRaw) as YtDlpMetadata;
     const duration = info.duration ?? metadata.duration;
-
-    if (duration > MAX_VIDEO_DURATION_SECONDS) {
-      throw videoTooLong();
-    }
 
     const localPath = join(workDir, videoFile);
     const { stat } = await import("node:fs/promises");
