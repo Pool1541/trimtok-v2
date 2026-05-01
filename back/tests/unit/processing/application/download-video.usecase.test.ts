@@ -3,6 +3,14 @@ import { DownloadVideoUseCase } from "../../../../src/processing/application/dow
 import { ErrorCode } from "../../../../src/shared/errors.js";
 import { JobStatus } from "../../../../src/jobs/domain/job-status.js";
 
+const { rmMock } = vi.hoisted(() => ({
+  rmMock: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("node:fs/promises", async (importActual) => ({
+  ...(await importActual<typeof import("node:fs/promises")>()),
+  rm: rmMock,
+}));
+
 function makeMocks() {
   return {
     jobRepo: {
@@ -15,7 +23,7 @@ function makeMocks() {
     artifactRepo: { findByKey: vi.fn(), save: vi.fn().mockResolvedValue(undefined), incrementDownloadCount: vi.fn() },
     downloader: {
       downloadVideo: vi.fn().mockResolvedValue({
-        localPath: "/tmp/vid123.mp4",
+        localPath: "/tmp/dl-abc123/vid123.mp4",
         videoInfo: { videoId: "vid123", title: "Test", durationSeconds: 45, originalUrl: "https://tiktok.com/video/123" },
         fileSizeBytes: 5000000,
       }),
@@ -43,6 +51,7 @@ describe("DownloadVideoUseCase", () => {
       mocks.storage as any,
       mocks.notifier as any,
     );
+    rmMock.mockClear();
   });
 
   it("returns false when lock is not acquired (concurrent worker)", async () => {
@@ -63,7 +72,7 @@ describe("DownloadVideoUseCase", () => {
 
     expect(mocks.jobRepo.updateStatus).toHaveBeenCalledWith("job1", JobStatus.downloading);
     expect(mocks.downloader.downloadVideo).toHaveBeenCalledOnce();
-    expect(mocks.storage.upload).toHaveBeenCalledWith("originals/vid123/vid123.mp4", "/tmp/vid123.mp4", "video/mp4");
+    expect(mocks.storage.upload).toHaveBeenCalledWith("originals/vid123/vid123.mp4", "/tmp/dl-abc123/vid123.mp4", "video/mp4");
     expect(mocks.artifactRepo.save).toHaveBeenCalledOnce();
     expect(mocks.jobRepo.updateStatus).toHaveBeenCalledWith("job1", JobStatus.ready, expect.objectContaining({ s3Key: "originals/vid123/vid123.mp4" }));
     expect(mocks.notifier.execute).toHaveBeenCalledWith("job1");
@@ -89,5 +98,30 @@ describe("DownloadVideoUseCase", () => {
     ).rejects.toThrow("S3 error");
 
     expect(mocks.jobRepo.releaseLock).toHaveBeenCalled();
+  });
+
+  it("removes workDir after successful download", async () => {
+    await useCase.execute("job1", "https://tiktok.com/video/123", "vid123", "mp4");
+    expect(rmMock).toHaveBeenCalledWith("/tmp/dl-abc123", { recursive: true, force: true });
+  });
+
+  it("removes workDir even when S3 upload fails", async () => {
+    mocks.storage.upload.mockRejectedValue(new Error("S3 error"));
+
+    await expect(
+      useCase.execute("job1", "https://tiktok.com/video/123", "vid123", "mp4"),
+    ).rejects.toThrow("S3 error");
+
+    expect(rmMock).toHaveBeenCalledWith("/tmp/dl-abc123", { recursive: true, force: true });
+  });
+
+  it("does not call rm when downloader fails (workDir not set)", async () => {
+    mocks.downloader.downloadVideo.mockRejectedValue(new Error("yt-dlp error"));
+
+    await expect(
+      useCase.execute("job1", "https://tiktok.com/video/123", "vid123", "mp4"),
+    ).rejects.toThrow("yt-dlp error");
+
+    expect(rmMock).not.toHaveBeenCalled();
   });
 });
