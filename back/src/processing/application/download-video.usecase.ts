@@ -6,7 +6,8 @@ import type { IStoragePort } from "../../jobs/application/ports/storage.port.js"
 import type { IDownloaderPort } from "./ports/downloader.port.js";
 import type { INotifyJobUpdateUseCase } from "../../notifications/application/notify-job-update.usecase.js";
 import { artifactPk, artifactSk } from "../../shared/table-keys.js";
-import { ulid } from "ulidx";
+import { rm } from "node:fs/promises";
+import { dirname } from "node:path";
 
 export class DownloadVideoUseCase {
   constructor(
@@ -29,12 +30,14 @@ export class DownloadVideoUseCase {
       return false;
     }
 
+    let workDir: string | undefined;
     try {
       // (2) Update status to downloading
       await this.jobRepo.updateStatus(jobId, JobStatus.downloading);
 
       // (3) Download via yt-dlp
       const result = await this.downloader.downloadVideo(tiktokUrl, "/tmp");
+      workDir = dirname(result.localPath);
 
       // (4) Upload to S3
       const s3Key = `originals/${videoId}/${videoId}.mp4`;
@@ -80,6 +83,11 @@ export class DownloadVideoUseCase {
       // Always attempt lock release on error
       await this.jobRepo.releaseLock(videoId).catch(() => { /* best-effort */ });
       throw err;
+    } finally {
+      // Always clean up the temp download directory to free ephemeral storage
+      if (workDir) {
+        await rm(workDir, { recursive: true, force: true }).catch(() => { /* best-effort */ });
+      }
     }
   }
 }

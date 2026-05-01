@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { CreateGifUseCase } from "../../../../src/processing/application/create-gif.usecase.js";
 import { JobStatus } from "../../../../src/jobs/domain/job-status.js";
 
+const { rmMock } = vi.hoisted(() => ({
+  rmMock: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("node:fs/promises", async (importActual) => ({
+  ...(await importActual<typeof import("node:fs/promises")>()),
+  rm: rmMock,
+}));
+
 function makeMocks() {
   return {
     jobRepo: {
@@ -29,6 +37,7 @@ describe("CreateGifUseCase", () => {
       mocks.jobRepo as any, mocks.artifactRepo as any, mocks.transcoder as any,
       mocks.storage as any, mocks.notifier as any,
     );
+    rmMock.mockClear();
   });
 
   it("downloads original from S3 as first step", async () => {
@@ -43,12 +52,29 @@ describe("CreateGifUseCase", () => {
 
   it("uploads to gifs/ S3 path", async () => {
     await useCase.execute("job1", "vid123", "originals/vid123/vid123.mp4", 0, 5);
-    expect(mocks.storage.upload).toHaveBeenCalledWith("gifs/vid123/job1.gif", expect.any(String), "image/gif");
+    expect(mocks.storage.upload).toHaveBeenCalledWith("gifs/vid123/job1.mp4", expect.any(String), "video/mp4");
   });
 
   it("updates job to gif_created and notifies", async () => {
     await useCase.execute("job1", "vid123", "originals/vid123/vid123.mp4", 0, 5);
-    expect(mocks.jobRepo.updateStatus).toHaveBeenCalledWith("job1", JobStatus.gif_created, expect.objectContaining({ s3Key: "gifs/vid123/job1.gif" }));
+    expect(mocks.jobRepo.updateStatus).toHaveBeenCalledWith("job1", JobStatus.gif_created, expect.objectContaining({ s3Key: "gifs/vid123/job1.mp4" }));
     expect(mocks.notifier.execute).toHaveBeenCalledWith("job1");
+  });
+
+  it("removes localIn and localOut after successful execution", async () => {
+    await useCase.execute("job1", "vid123", "originals/vid123/vid123.mp4", 0, 5);
+    expect(rmMock).toHaveBeenCalledWith(expect.stringContaining("vid123_orig_gif"), { force: true });
+    expect(rmMock).toHaveBeenCalledWith(expect.stringContaining("job1_gif"), { force: true });
+  });
+
+  it("removes localIn and localOut even when transcoder fails", async () => {
+    mocks.transcoder.createGif.mockRejectedValue(new Error("ffmpeg error"));
+
+    await expect(
+      useCase.execute("job1", "vid123", "originals/vid123/vid123.mp4", 0, 5),
+    ).rejects.toThrow("ffmpeg error");
+
+    expect(rmMock).toHaveBeenCalledWith(expect.stringContaining("vid123_orig_gif"), { force: true });
+    expect(rmMock).toHaveBeenCalledWith(expect.stringContaining("job1_gif"), { force: true });
   });
 });

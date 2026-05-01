@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ExtractMp3UseCase } from "../../../../src/processing/application/extract-mp3.usecase.js";
 import { JobStatus } from "../../../../src/jobs/domain/job-status.js";
 
+const { rmMock } = vi.hoisted(() => ({
+  rmMock: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("node:fs/promises", async (importActual) => ({
+  ...(await importActual<typeof import("node:fs/promises")>()),
+  rm: rmMock,
+}));
+
 function makeMocks() {
   return {
     jobRepo: {
@@ -29,6 +37,7 @@ describe("ExtractMp3UseCase", () => {
       mocks.jobRepo as any, mocks.artifactRepo as any, mocks.transcoder as any,
       mocks.storage as any, mocks.notifier as any,
     );
+    rmMock.mockClear();
   });
 
   it("downloads original from S3 first", async () => {
@@ -54,5 +63,22 @@ describe("ExtractMp3UseCase", () => {
     await useCase.execute("job1", "vid123", "originals/vid123/vid123.mp4");
     expect(mocks.jobRepo.updateStatus).toHaveBeenCalledWith("job1", JobStatus.mp3_ready, expect.any(Object));
     expect(mocks.notifier.execute).toHaveBeenCalledWith("job1");
+  });
+
+  it("removes localIn and localOut after successful execution", async () => {
+    await useCase.execute("job1", "vid123", "originals/vid123/vid123.mp4");
+    expect(rmMock).toHaveBeenCalledWith(expect.stringContaining("vid123_orig_mp3"), { force: true });
+    expect(rmMock).toHaveBeenCalledWith(expect.stringContaining("job1"), { force: true });
+  });
+
+  it("removes localIn and localOut even when transcoder fails", async () => {
+    mocks.transcoder.extractMp3.mockRejectedValue(new Error("ffmpeg error"));
+
+    await expect(
+      useCase.execute("job1", "vid123", "originals/vid123/vid123.mp4"),
+    ).rejects.toThrow("ffmpeg error");
+
+    expect(rmMock).toHaveBeenCalledWith(expect.stringContaining("vid123_orig_mp3"), { force: true });
+    expect(rmMock).toHaveBeenCalledWith(expect.stringContaining("job1"), { force: true });
   });
 });
