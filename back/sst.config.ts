@@ -8,8 +8,6 @@ export default $config({
       home: "aws",
       providers: {
         aws: {
-          accessKey: process.env.AWS_ACCESS_KEY_ID,
-          secretKey: process.env.AWS_SECRET_ACCESS_KEY,
           region: process.env.AWS_REGION ?? "us-east-1",
         },
         cloudflare: {
