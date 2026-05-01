@@ -115,6 +115,30 @@ describe("DownloadVideoUseCase", () => {
     expect(rmMock).toHaveBeenCalledWith("/tmp/dl-abc123", { recursive: true, force: true });
   });
 
+  it("resolves from existing artifact after acquiring lock (SQS retry path)", async () => {
+    const artifact = {
+      pk: "ARTIFACT#vid123", sk: "MP4#ORIGINAL", type: "ARTIFACT" as const,
+      videoId: "vid123", tiktokUrl: "https://tiktok.com/video/123",
+      format: "mp4" as const, artifactType: "original" as const,
+      s3Key: "originals/vid123/vid123.mp4",
+      title: "Test", duration: 45, thumbnailUrl: "https://thumb.example.com/t.jpg",
+      downloadCount: 1, createdAt: new Date().toISOString(), expiresAt: 9999999999,
+    };
+    mocks.artifactRepo.findByKey.mockResolvedValue(artifact);
+    mocks.storage.objectExists.mockResolvedValue(true);
+
+    const result = await useCase.execute("job1", "https://tiktok.com/video/123", "vid123", "mp4");
+
+    expect(result).toBe(true);
+    expect(mocks.downloader.downloadVideo).not.toHaveBeenCalled();
+    expect(mocks.storage.upload).not.toHaveBeenCalled();
+    expect(mocks.jobRepo.updateStatus).toHaveBeenCalledWith("job1", JobStatus.ready,
+      expect.objectContaining({ s3Key: "originals/vid123/vid123.mp4", title: "Test" })
+    );
+    expect(mocks.jobRepo.releaseLock).toHaveBeenCalled();
+    expect(mocks.notifier.execute).toHaveBeenCalledWith("job1");
+  });
+
   it("does not call rm when downloader fails (workDir not set)", async () => {
     mocks.downloader.downloadVideo.mockRejectedValue(new Error("yt-dlp error"));
 
