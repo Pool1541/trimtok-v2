@@ -32,6 +32,24 @@ export class DownloadVideoUseCase {
 
     let workDir: string | undefined;
     try {
+      // (1b) Artifact already in S3? (SQS retry path: lock released after completion, message redelivered)
+      const existingArtifact = await this.artifactRepo.findByKey(videoId, format, "original");
+      if (existingArtifact) {
+        const exists = await this.storage.objectExists(existingArtifact.s3Key);
+        if (exists) {
+          await this.jobRepo.updateStatus(jobId, JobStatus.ready, {
+            s3Key: existingArtifact.s3Key,
+            videoId,
+            title: existingArtifact.title,
+            duration: existingArtifact.duration,
+            thumbnailUrl: existingArtifact.thumbnailUrl,
+          });
+          await this.jobRepo.releaseLock(videoId);
+          await this.notifier.execute(jobId);
+          return true;
+        }
+      }
+
       // (2) Update status to downloading
       await this.jobRepo.updateStatus(jobId, JobStatus.downloading);
 
