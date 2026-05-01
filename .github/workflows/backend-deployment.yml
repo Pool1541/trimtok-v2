@@ -7,6 +7,8 @@ on:
     paths:
       - "back/src/**"
       - "back/sst.config.ts"
+      - "back/package.json"
+      - "back/layers/**"
       - "package-lock.json"
   workflow_dispatch:
 
@@ -64,10 +66,13 @@ jobs:
             | tar -xJ --strip-components=2 --wildcards -C back/layers/ffmpeg/bin '*/bin/ffmpeg'
           chmod +x back/layers/ffmpeg/bin/ffmpeg
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
       - name: Deploy with SST
         run: npm run deploy:back
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ vars.AWS_REGION }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
