@@ -79,4 +79,14 @@ export class JobDynamoRepo implements IJobRepository {
       new DeleteCommand({ TableName: TABLE_NAME, Key: { pk: lockPk(videoId), sk: lockSk() } }),
     );
   }
+
+  async getLock(videoId: string): Promise<{ jobId: string } | null> {
+    const result = await this.client.send(
+      new GetCommand({ TableName: TABLE_NAME, Key: { pk: lockPk(videoId), sk: lockSk() } }),
+    );
+    if (!result.Item) return null;
+    const item = result.Item as { jobId: string; expiresAt: number };
+    if (item.expiresAt <= Math.floor(Date.now() / 1000)) return null;
+    return { jobId: item.jobId };
+  }
 }
