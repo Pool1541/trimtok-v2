@@ -80,4 +80,27 @@ describe("JobDynamoRepo (integration)", () => {
     expect(again).toBe(true);
     await repo.releaseLock("lockVideo2");
   });
+
+  it("getLock returns the active jobId when a valid lock exists", async () => {
+    await repo.acquireLock("lockVideo3", "job-getLock-1");
+
+    const lock = await repo.getLock("lockVideo3");
+    expect(lock).not.toBeNull();
+    expect(lock?.jobId).toBe("job-getLock-1");
+
+    await repo.releaseLock("lockVideo3");
+  });
+
+  it("getLock returns null when no lock exists", async () => {
+    const lock = await repo.getLock("lockVideo-never-locked");
+    expect(lock).toBeNull();
+  });
+
+  it("getLock returns null after the lock is released", async () => {
+    await repo.acquireLock("lockVideo4", "job-getLock-2");
+    await repo.releaseLock("lockVideo4");
+
+    const lock = await repo.getLock("lockVideo4");
+    expect(lock).toBeNull();
+  });
 });
