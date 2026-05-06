@@ -15,9 +15,11 @@ const logger = createLogger("api/request-mp3");
 
 app.use(correlationMiddleware("api/request-mp3"));
 
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
 const schema = z.object({
-  trimStart: z.number().min(0).transform(Math.floor).optional(),
-  trimEnd: z.number().positive().transform(Math.floor).optional(),
+  trimStart: z.number().min(0).transform(round1).optional(),
+  trimEnd: z.number().positive().transform(round1).optional(),
 });
 
 app.post(

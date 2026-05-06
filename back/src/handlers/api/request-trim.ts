@@ -15,9 +15,11 @@ const logger = createLogger("api/request-trim");
 
 app.use(correlationMiddleware("api/request-trim"));
 
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
 const schema = z.object({
-  trimStart: z.number().min(0).transform(Math.floor),
-  trimEnd: z.number().positive().transform(Math.floor),
+  trimStart: z.number().min(0).transform(round1),
+  trimEnd: z.number().positive().transform(round1),
 });
 
 app.post(
