@@ -55,6 +55,16 @@ describe("TrimVideoUseCase", () => {
     );
   });
 
+  it("calls transcoder.trim with decimal start/end values", async () => {
+    await useCase.execute("job1", "vid123", "originals/vid123/vid123.mp4", 1.5, 3.7);
+    expect(mocks.transcoder.trim).toHaveBeenCalledWith(
+      expect.stringContaining("vid123_orig"),
+      expect.stringContaining("job1"),
+      1.5,
+      3.7,
+    );
+  });
+
   it("uploads to trims/ S3 path", async () => {
     await useCase.execute("job1", "vid123", "originals/vid123/vid123.mp4", 0, 10);
     expect(mocks.storage.upload).toHaveBeenCalledWith("trims/vid123/job1.mp4", expect.any(String), "video/mp4");
