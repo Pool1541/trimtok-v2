@@ -19,7 +19,9 @@ export function artifactSk(
   trimEnd?: number,
 ): string {
   if (trimStart !== undefined && trimEnd !== undefined) {
-    return `${format.toUpperCase()}#${type.toUpperCase()}#${trimStart}#${trimEnd}`;
+    const s = Math.round(trimStart * 10) / 10;
+    const e = Math.round(trimEnd * 10) / 10;
+    return `${format.toUpperCase()}#${type.toUpperCase()}#${s}#${e}`;
   }
   return `${format.toUpperCase()}#${type.toUpperCase()}`;
 }

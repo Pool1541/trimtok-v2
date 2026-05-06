@@ -21,10 +21,13 @@ export class FfmpegAdapter implements ITranscoderPort {
   async trim(inputPath: string, outputPath: string, start: number, end: number): Promise<void> {
     await runFfmpeg([
       "-y",
+      "-i", inputPath,
       "-ss", String(start),
       "-to", String(end),
-      "-i", inputPath,
-      "-c", "copy",
+      "-c:v", "libopenh264",
+      "-b:v", "800k",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
       "-avoid_negative_ts", "make_zero",
       outputPath,
     ]);
